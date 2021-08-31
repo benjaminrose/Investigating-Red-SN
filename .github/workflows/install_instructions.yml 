@@ -1,0 +1,41 @@
+# .github/workflows/install_instructions.yml -- Making sure our installation & reproducibility instructions are up to date.
+
+# External guides and tools.
+#https://github.com/marketplace/actions/setup-miniconda
+#https://cjolowicz.github.io/posts/hypermodern-python-06-ci-cd/
+
+
+on: 
+  push:
+  schedule:
+	# * is a special character in YAML so you have to quote this string
+	# test every month, just to make sure it is still working long term
+	# https://crontab.guru/#5_1_1_*_*
+	# cant use @monthly in GitHub Actions
+	- cron:  '5 1 1 * *'
+
+jobs:
+  build:
+	name: Test Install Instructions, ${{ matrix.os }}
+	
+	runs-on: ${{ matrix.os }}
+   
+	strategy:
+	  fail-fast: false
+	  matrix:
+		os: ['ubuntu-latest', 'macos-latest', 'windows-latest']
+   
+	steps:
+	  - uses: actions/checkout@v2
+	  - uses: conda-incubator/setup-miniconda@v2
+		with:
+		  activate-environment: red_sn
+		  environment-file: red_sn.yaml
+		  auto-activate-base: false
+	  - shell: bash -l {0}
+		run: |
+		  conda info
+		  conda list
+	  - shell: bash -l {0}
+		run: |
+		  echo "Install worked, but no test of the enviornment/scripts was run"
