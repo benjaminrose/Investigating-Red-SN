@@ -4,7 +4,20 @@
 For typical SN we expect a nonlinear changing beta as you transition from low dust to high dust. (assuming line-of-sight dust produces more scatter than intrinsic color variation)
 
 
-# Initial test
+## Installation
+
+```shell
+git clone git@github.com:benjaminrose/Investigating-Red-SN.git
+cd Investigating-Red-SN
+conda env create -f red_sn.yaml --yes
+conda activate red_sn
+```
+
+
+A worked example is in `.github/workflows/install_instructions.yml` and `make setup`.
+
+
+## Initial test
 
 Look at red SN (c > 0.3). What are HR (from basic Tripp) vs color? - Is it linear (one type of dust) or not?
 
