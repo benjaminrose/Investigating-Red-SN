@@ -33,9 +33,9 @@ jobs:
           activate-environment: red_sn
           environment-file: red_sn.yaml
           auto-activate-base: false
-			- shell: bash -l {0}
-			run: |
-				pip install git+https://github.com/benjaminrose/br-util.git
+      - shell: bash -l {0}
+      run: |
+        pip install git+https://github.com/benjaminrose/br-util.git
       - shell: bash -l {0}
         run: |
           conda info
