@@ -11,10 +11,12 @@ git clone git@github.com:benjaminrose/Investigating-Red-SN.git
 cd Investigating-Red-SN
 conda env create -f red_sn.yaml --yes
 conda activate red_sn
+pip install git+https://github.com/benjaminrose/br-util.git
 ```
 
+Not sure why pip installation via GitHub is not working with conda.
 
-A worked example is in `.github/workflows/install_instructions.yml` and `make setup`.
+A worked example is in `.github/workflows/main.yml` and `make setup`.
 
 
 ## Initial test

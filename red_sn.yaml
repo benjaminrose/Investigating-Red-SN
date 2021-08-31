@@ -17,4 +17,3 @@ dependencies:
   - scipy
   - seaborn
   - pip
-  	- git+https://github.com/benjaminrose/br-util.git
