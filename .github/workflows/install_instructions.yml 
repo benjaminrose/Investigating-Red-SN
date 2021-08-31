@@ -4,6 +4,7 @@
 #https://github.com/marketplace/actions/setup-miniconda
 #https://cjolowicz.github.io/posts/hypermodern-python-06-ci-cd/
 
+name: "Installation Test"
 
 on: 
   push:
