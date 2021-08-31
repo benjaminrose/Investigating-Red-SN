@@ -1,0 +1,20 @@
+# red_sn.yaml - a YAML file describing the minimally specified conda environment
+# https://conda.io/docs/user-guide/tasks/manage-environments.html#create-env-file-manually
+# install via `conda env create -f red_sn.yaml`
+# update (either new or upgraded depedencies) via `conda env update -f red_sn.yaml`
+# create a 'locked' version of all dependencies via `conda env export -f red_sn_lock.yaml`
+
+name: red_sn
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.8
+  - astropy
+  - matplotlib
+  - numpy
+  - pandas
+  - scipy
+  - seaborn
+  - pip
+  	- git+https://github.com/benjaminrose/br-util.git
