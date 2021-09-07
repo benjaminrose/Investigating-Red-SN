@@ -78,7 +78,18 @@ class Fitres:
 
         return self
 
-    def plot_dit(self, key, filename=""):
+    def plot_hist(self, key, filename=""):
+        new_figure()
+        ax = sns.histplot(
+            data=self.data,
+            x=key,
+            color="b",
+            cumulative=False,
+            # **self.histplot_keywords,
+        )
+        save_plot(filename)
+
+    def plot_hist_c_special(self, key, filename=""):
         new_figure()
         ax = sns.histplot(
             data=np.log(self.data[key] - self.data[key].min() - 0.0001),
@@ -90,7 +101,7 @@ class Fitres:
         ax.set_xlabel(f"log(c +{self.data[key].min() +0.0001:+.3f})")
         save_plot(filename)
 
-    def plot_dits(self, key="FITPROB", filename=""):
+    def plot_hists(self, key="FITPROB", filename=""):
         new_figure()
 
         ax = sns.histplot(
@@ -333,17 +344,13 @@ if __name__ == "__main__":
 
     data.make_fitres_set()
 
-    from sys import exit
-
-    exit()
-
     for c_split in c_splits:
         data.slipt_on_c(c_split)
-        data.plot_dits("FITPROB", f"fitprob_dist_{c_split}.pdf")
-        data.plot_dits("x1", f"x1_dist_{c_split}.pdf")
-        data.plot_dits("HOST_LOGMASS", f"mass_dist_{c_split}.pdf")
-    data.plot_dit("c", f"c_dist.pdf")
-
+        data.plot_hists("FITPROB", f"fitprob_dist_{c_split}.pdf")
+        data.plot_hists("x1", f"x1_dist_{c_split}.pdf")
+        data.plot_hists("HOST_LOGMASS", f"mass_dist_{c_split}.pdf")
+    data.plot_hist("c", f"c_dist.pdf")
+    data.plot_hist_c_special("c", f"c_dist_special.pdf")
 
     # OLd way
     # data = read_data(data_file)
