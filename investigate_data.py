@@ -73,6 +73,9 @@ class Fitres:
             save_location = Path(f"{key}_{bin_size}/")
             save_location.mkdir(exist_ok=True)
 
+        cosmo_sample = self.data[(-0.3 < self.data[key]) & (self.data[key] <= 0.3)]
+        self.to_file(save_location / f"PANTHEON_c_cosmo.FITRES", cosmo_sample)
+
         return self
 
     def plot_dit(self, key, filename=""):
