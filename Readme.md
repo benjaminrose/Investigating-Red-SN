@@ -1,5 +1,6 @@
 # Investigating Red SN
 
+[![Installation Test](https://github.com/benjaminrose/Investigating-Red-SN/actions/workflows/main.yml/badge.svg)](https://github.com/benjaminrose/Investigating-Red-SN/actions/workflows/main.yml)
 
 For typical SN we expect a nonlinear changing beta as you transition from low dust to high dust. (assuming line-of-sight dust produces more scatter than intrinsic color variation)
 
