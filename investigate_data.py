@@ -20,7 +20,7 @@ sns.set(context="talk", style="ticks", font="serif", color_codes=True)
 class Fitres:
     # should this subclass pandas?
     def __init__(self, file_path, verbose=False):
-        self.data = read_data(file_path, verbose)
+        self.data = read_data(file_path, 2, verbose)
         self.VERBOSE = verbose
         # Keywords used in plotting both data sets
         # So not: data, labels, colors, ...
@@ -327,6 +327,10 @@ if __name__ == "__main__":
     data = Fitres(data_file, VERBOSE)
     data.cut_x1(x1_max)
 
+    data.slipt_on_c(0.99)
+    print("SN at c=1 boundry.")
+    print(data.red_subsample[["CID", "IDSURVEY", "c"]])
+
     data.make_fitres_set()
 
     from sys import exit
@@ -340,9 +344,6 @@ if __name__ == "__main__":
         data.plot_dits("HOST_LOGMASS", f"mass_dist_{c_split}.pdf")
     data.plot_dit("c", f"c_dist.pdf")
 
-    data.slipt_on_c(0.99)
-    print("SN at c=1 boundry.")
-    print(data.red_subsample[["CIDint", "IDSURVEY", "c"]])
 
     # OLd way
     # data = read_data(data_file)
