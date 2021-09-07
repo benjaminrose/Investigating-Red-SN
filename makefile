@@ -6,7 +6,7 @@
 
 
 setup: ## set up environment (does not work in make yet)
-	conda activate red_sn || (conda env create -f red_sn.yaml --yes && conda activate red_sn)
+	@echo "Run\n(conda activate red_sn) || (conda env create -f red_sn.yaml && conda activate red_sn)"
 	
 do: run ## Run the main script
 	python investigate_data.py
