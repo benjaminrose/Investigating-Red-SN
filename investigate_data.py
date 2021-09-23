@@ -20,7 +20,7 @@ sns.set(context="talk", style="ticks", font="serif", color_codes=True)
 class Fitres:
     # should this subclass pandas?
     def __init__(self, file_path, verbose=False):
-        self.data = read_data(file_path, 2, verbose)
+        self.data = read_data(file_path, 1, verbose)
         self.VERBOSE = verbose
         # Keywords used in plotting both data sets
         # So not: data, labels, colors, ...
@@ -84,7 +84,7 @@ class Fitres:
     def plot_hist(self, key, filename=""):
         new_figure()
         ax = sns.histplot(
-            data=self.data,
+            data=self.data[~self.data.index.duplicated(keep="first")],
             x=key,
             color="b",
             cumulative=False,
@@ -108,14 +108,16 @@ class Fitres:
         new_figure()
 
         ax = sns.histplot(
-            data=self.blue_subsample,
+            data=self.blue_subsample[
+                ~self.blue_subsample.index.duplicated(keep="first")
+            ],
             label=f"c <= {self.c_split}",
             x=key,
             color="b",
             **self.histplot_keywords,
         )
         sns.histplot(
-            data=self.red_subsample,
+            data=self.red_subsample[~self.red_subsample.index.duplicated(keep="first")],
             x=key,
             ax=ax,
             label=f"c > {self.c_split}",
@@ -344,7 +346,7 @@ if __name__ == "__main__":
 
     data.slipt_on_c(0.99)
     print("SN at c=1 boundry.")
-    print(data.red_subsample[["CID", "IDSURVEY", "c"]])
+    print(data.red_subsample[["CIDint", "IDSURVEY", "c"]])
 
     data.make_fitres_set()
 
