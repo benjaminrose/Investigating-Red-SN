@@ -35,9 +35,6 @@ class Fitres:
         self.alpha = 0.15
         self.beta = 3.1
 
-    def test(self):
-        print("duplications:", self.data[self.data.index.duplicated()])
-
     def calc_HR(self):
         """Adds columns "mu_theory", "x1_standardized", & "HR_naive"
 
@@ -214,7 +211,7 @@ if __name__ == "__main__":
     data = Fitres(data_file, VERBOSE)
     data.cut_x1(x1_max)
     data.calc_HR()
-    data.test()
+
 
     data.slipt_on_c(0.99)
     print("SN at c=1 boundry.")
