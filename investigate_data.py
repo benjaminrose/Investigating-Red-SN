@@ -65,7 +65,24 @@ class Fitres:
             )
         return self.data
 
-    def cut_x1(self, x1_max):
+    def clean_data(self, x1_max=5, cerr_max=1):
+        self._cut_x1(x1_max)
+        self._cut_cerr(cerr_max)
+        return self
+
+    def _cut_cerr(self, cerr_max):
+        if self.VERBOSE:
+            print(
+                f"Initial cERR distribution:\n{self.data[['c', 'cERR']].describe()}\n"
+            )
+        self.data = self.data[np.abs(self.data["cERR"]) <= cerr_max]
+        if self.VERBOSE:
+            print(
+                f"After-cuts cERR distribution:\n{self.data[['c', 'cERR']].describe()}\n"
+            )
+        return self.data
+
+    def _cut_x1(self, x1_max):
         if self.VERBOSE:
             print(f"Initial x1 distribution:\n{self.data['x1'].describe()}\n")
         self.data = self.data[np.abs(self.data["x1"]) <= x1_max]
@@ -204,12 +221,13 @@ if __name__ == "__main__":
     VERBOSE = True
     c_splits = [0.1, 0.3]
     x1_max = 3  # x1 cut is on abs(x1)
+    cerr_max = 0.2
     # fitprob_min = 0.1
     COSMO = wCDM(H0=70, Om0=0.3, Ode0=0.7, w0=-1)
 
     # Import and clean data
     data = Fitres(data_file, VERBOSE)
-    data.cut_x1(x1_max)
+    data.clean_data(x1_max, cerr_max)
     data.calc_HR()
 
 
