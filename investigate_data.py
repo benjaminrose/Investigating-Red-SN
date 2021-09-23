@@ -90,7 +90,7 @@ class Fitres:
             print(f"After-cuts x1 distribution:\n{self.data['x1'].describe()}\n")
         return self.data
 
-    def plot_beta(self, save=True):
+    def plot_beta_ben(self, save=True):
         fig, ax = new_figure()
 
         # y = data["mB"] - data["mu_theory"] - alpha * data["x1"]
@@ -126,7 +126,7 @@ class Fitres:
         ax.invert_yaxis()
         plt.legend(fontsize="smaller")
 
-        save_plot("color-luminosity.pdf")
+        save_plot("color-luminosity-naive.pdf")
 
     def plot_hist(self, key, filename=""):
         new_figure()
@@ -215,6 +215,62 @@ class Fitres:
         df.to_csv(filename, sep=" ", index=False)
 
 
+def plot_beta(data, sim, filename=""):
+    """
+    Note
+    ----
+    The Fitres objects are not extentions to DataFrames (yet). To get
+    to the DataFrame you need to use `Fitres.data`.
+    """
+    bins = 25
+
+    fig, ax = new_figure()
+
+    sim_mask = sim.data["c"] > -0.5
+    sim_c = sim.data.loc[sim_mask, "c"]
+    # sim_y_axis = sim.data.loc[sim_mask, "mB"]
+    sim_y_axis = sim.data.loc[sim_mask, "x1_standardized"]
+    data_x = data.data["c"]
+    data_y = data.data["x1_standardized"]
+
+    ax.plot(sim_c, sim_y_axis, ".", markersize=3, alpha=0.3, label="BS21 Simulations")
+    ax.plot(data_x, data_y, ".", markersize=3, alpha=0.3, label="Pantheon+")
+
+    sim_stat, sim_edges, _ = binned_statistic(
+        sim_c, sim_y_axis, statistic="median", bins=bins
+    )
+    sim_error, _, _ = binned_statistic(
+        sim_c, sim_y_axis, statistic=robust_scatter, bins=bins
+    )
+    data_stat, data_edges, _ = binned_statistic(
+        data_x, data_y, statistic="median", bins=bins
+    )
+    data_error, _, _ = binned_statistic(
+        data_x, data_y, statistic=robust_scatter, bins=bins
+    )
+
+    ax.errorbar(
+        (sim_edges[:-1] + sim_edges[1:]) / 2,
+        sim_stat,
+        yerr=sim_error,
+        fmt="^",
+        label="Binned Simulations",
+    )
+    ax.errorbar(
+        (data_edges[:-1] + data_edges[1:]) / 2,
+        data_stat,
+        yerr=data_error,
+        fmt="^",
+        label="Binned Data",
+    )
+
+    ax.set_xlabel("c")
+    ax.set_ylabel("mB - mu(z) - 0.15 * x1")
+    ax.legend(fontsize="small")
+
+    save_plot(filename)
+
+
 if __name__ == "__main__":
     # Inputs
     data_file = Path("data") / Path("INPUT_FITOPT000.FITRES")
@@ -230,7 +286,6 @@ if __name__ == "__main__":
     data.clean_data(x1_max, cerr_max)
     data.calc_HR()
 
-
     data.slipt_on_c(0.99)
     print("SN at c=1 boundry.")
     print(data.red_subsample[["CIDint", "IDSURVEY", "c"]])
@@ -241,6 +296,10 @@ if __name__ == "__main__":
         data.plot_hists("x1", f"x1_dist_{c_split}.pdf")
         data.plot_hists("HOST_LOGMASS", f"mass_dist_{c_split}.pdf")
 
-    data.plot_beta()
     data.plot_hist("c", f"c_dist.pdf")
     data.plot_hist_c_special("c", f"c_dist_special.pdf")
+
+    sims = Fitres(Path("data/COMBINED_SIMS.FITRES"))
+    sims.clean_data(x1_max, cerr_max)
+    sims.calc_HR()
+    plot_beta(data, sims, "color-luminosity.png")
