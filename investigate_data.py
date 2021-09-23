@@ -31,9 +31,42 @@ class Fitres:
             "fill": False,
             "stat": "density",
         }
+        self.M0 = -19.34
+        self.alpha = 0.15
+        self.beta = 3.1
 
     def test(self):
         print("duplications:", self.data[self.data.index.duplicated()])
+
+    def calc_HR(self):
+        """Adds columns "mu_theory", "x1_standardized", & "HR_naive"
+
+        Parameters
+        ----------
+        data: pandas.DataFrame
+            `data` needs columns "mB", "x1", "c". Data is assumed to be a
+            DataFrame of an SNANA fitres file.
+        M0:
+        alpha:
+        beta:
+        """
+        self.data["mu_theory"] = COSMO.distmod(self.data["zHD"]).value
+        self.data["x1_standardized"] = (
+            self.data["mB"] - self.data["mu_theory"] - self.alpha * self.data["x1"]
+        )
+        self.data["HR_naive"] = (
+            self.data["mB"]
+            + self.alpha * self.data["x1"]
+            - self.beta * self.data["c"]
+            + self.M0
+            - self.data["mu_theory"]
+        )
+
+        if self.VERBOSE:
+            print(
+                f"Naive distances:\n{self.data[['zHD', 'mu_theory', 'x1_standardized', 'HR_naive']].head(10)}\n"
+            )
+        return self.data
 
     def cut_x1(self, x1_max):
         if self.VERBOSE:
@@ -337,11 +370,12 @@ if __name__ == "__main__":
     x1_max = 3  # x1 cut is on abs(x1)
     # fitprob_min = 0.1
     # M0, alpha, beta = 19.34, 0.15, 3.1
-    # COSMO = wCDM(H0=70, Om0=0.3, Ode0=0.7, w0=-1)
+    COSMO = wCDM(H0=70, Om0=0.3, Ode0=0.7, w0=-1)
 
     # Import and clean data
     data = Fitres(data_file, VERBOSE)
     data.cut_x1(x1_max)
+    data.calc_HR()
     data.test()
 
     data.slipt_on_c(0.99)
