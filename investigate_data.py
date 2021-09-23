@@ -76,43 +76,84 @@ class Fitres:
             print(f"After-cuts x1 distribution:\n{self.data['x1'].describe()}\n")
         return self.data
 
-    def make_fitres_set(self, key="c", bin_size=None):
-        """
-        Make a set of SNANA FITRES files that split the dataset into bins.
+    #     def make_fitres_set(self, key="c", bin_size=None):
+    #         """
+    #         Make a set of SNANA FITRES files that split the dataset into bins.
+    #
+    #         FITRES files are saved in a folder called "{key}_{bin_size}/".
+    #
+    #
+    #         Parameters
+    #         ----------
+    #         key: string
+    #             The FITRES key used to split on. Defaults to "c".
+    #         bin_size: float
+    #             The width of each FITRES bin. If `None` (default), just slits into three bins at c=0 and c=0.3.
+    #
+    #         Returns
+    #         -------
+    #         Fitres class
+    #         """
+    #         if bin_size is None:
+    #             cut_at = (0, 0.3)
+    #             save_location = Path(f"{key}_default/")
+    #             save_location.mkdir(exist_ok=True)
+    #
+    #             blue = self.data[self.data[key] <= cut_at[0]]
+    #             red = self.data[(0 < self.data[key]) & (self.data[key] <= cut_at[1])]
+    #             very_red = self.data[cut_at[1] < self.data[key]]
+    #
+    #             for df, cut in zip(
+    #                 [blue, red, very_red], ["cosmoblue", "cosmored", "veryred"]
+    #             ):
+    #                 self.to_file(save_location / f"PANTHEON_c_{cut}.FITRES", df)
+    #         else:
+    #             raise NotImplementedError
+    #             save_location = Path(f"{key}_{bin_size}/")
+    #             save_location.mkdir(exist_ok=True)
+    #
+    #         cosmo_sample = self.data[(-0.3 < self.data[key]) & (self.data[key] <= 0.3)]
+    #         self.to_file(save_location / f"PANTHEON_c_cosmo.FITRES", cosmo_sample)
+    #
+    #         return self
 
-        FITRES files are saved in a folder called "{key}_{bin_size}/".
+    def plot_beta(self, save=True):
+        fig, ax = new_figure()
 
+        # y = data["mB"] - data["mu_theory"] - alpha * data["x1"]
+        x_main = np.linspace(self.data["c"].min(), self.data["c"].max(), 50)
+        x_alt1 = np.linspace(0.15, 0.8, 50)
+        x_alt2 = np.linspace(0.8, self.data["c"].max(), 20)
+        beta1 = 3.5
+        M0_1 = 0.25
+        beta2 = 1.0
+        M0_2 = 2.0
 
-        Parameters
-        ----------
-        key: string
-            The FITRES key used to split on. Defaults to "c".
-        bin_size: float
-            The width of each FITRES bin. If `None` (default), just slits into three bins at c=0 and c=0.3.
+        ax.plot(self.data["c"], self.data["x1_standardized"], ".", alpha=0.7)
+        ax.plot(
+            x_main,
+            self.beta * x_main + self.M0,
+            label=r"$\beta$" + f"={self.beta}, M0={self.M0}",
+        )
+        ax.plot(
+            x_alt1,
+            beta1 * x_alt1 + self.M0 + M0_1,
+            label=r"$\beta$" + f"={beta1}, M0={self.M0+M0_1}",
+        )
+        ax.plot(
+            x_alt2,
+            beta2 * x_alt2 + self.M0 + M0_2,
+            label=r"$\beta$" + f"={beta2}, M0={self.M0+M0_2}",
+        )
 
-        Returns
-        -------
-        Fitres class
-        """
-        if bin_size is None:
-            save_location = Path(f"{key}_default/")
-            save_location.mkdir(exist_ok=True)
+        ax.set(
+            xlabel="Apparent Color c",
+            ylabel=f"$ m_B - \mu(z) + ${self.alpha} $x_1$ (mag)",
+        )
+        ax.invert_yaxis()
+        plt.legend(fontsize="smaller")
 
-            blue = self.data[self.data[key] <= 0]
-            red = self.data[(0 < self.data[key]) & (self.data[key] <= 0.3)]
-            very_red = self.data[0.3 < self.data[key]]
-
-            for df, cut in zip([blue, red, very_red], [0, 0.3, 1]):
-                self.to_file(save_location / f"PANTHEON_c_{cut}.FITRES", df)
-        else:
-            raise NotImplementedError
-            save_location = Path(f"{key}_{bin_size}/")
-            save_location.mkdir(exist_ok=True)
-
-        cosmo_sample = self.data[(-0.3 < self.data[key]) & (self.data[key] <= 0.3)]
-        self.to_file(save_location / f"PANTHEON_c_cosmo.FITRES", cosmo_sample)
-
-        return self
+        save_plot("color-luminosity.pdf")
 
     def plot_hist(self, key, filename=""):
         new_figure()
@@ -382,13 +423,15 @@ if __name__ == "__main__":
     print("SN at c=1 boundry.")
     print(data.red_subsample[["CIDint", "IDSURVEY", "c"]])
 
-    data.make_fitres_set()
+    # data.make_fitres_set() #just do this in SALT2mu.exe
 
     for c_split in c_splits:
         data.slipt_on_c(c_split)
         data.plot_hists("FITPROB", f"fitprob_dist_{c_split}.pdf")
         data.plot_hists("x1", f"x1_dist_{c_split}.pdf")
         data.plot_hists("HOST_LOGMASS", f"mass_dist_{c_split}.pdf")
+
+    data.plot_beta()
     data.plot_hist("c", f"c_dist.pdf")
     data.plot_hist_c_special("c", f"c_dist_special.pdf")
 
