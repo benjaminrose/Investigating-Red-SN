@@ -6,7 +6,6 @@ from re import VERBOSE
 from astropy.cosmology import wCDM
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 from scipy.stats import binned_statistic
 import seaborn as sns
 
@@ -282,6 +281,7 @@ if __name__ == "__main__":
     COSMO = wCDM(H0=70, Om0=0.3, Ode0=0.7, w0=-1)
 
     # Import and clean data
+    ####
     data = Fitres(data_file, VERBOSE)
     data.clean_data(x1_max, cerr_max)
     data.calc_HR()
@@ -290,6 +290,14 @@ if __name__ == "__main__":
     print("SN at c=1 boundry.")
     print(data.red_subsample[["CIDint", "IDSURVEY", "c"]])
 
+    # Work with sim data
+    ####
+    sims = Fitres(Path("data/COMBINED_SIMS.FITRES"))
+    sims.clean_data(x1_max, cerr_max)
+    sims.calc_HR()
+
+    # Plots
+    ###
     for c_split in c_splits:
         data.slipt_on_c(c_split)
         data.plot_hists("FITPROB", f"fitprob_dist_{c_split}.pdf")
@@ -299,7 +307,7 @@ if __name__ == "__main__":
     data.plot_hist("c", f"c_dist.pdf")
     data.plot_hist_c_special("c", f"c_dist_special.pdf")
 
-    sims = Fitres(Path("data/COMBINED_SIMS.FITRES"))
-    sims.clean_data(x1_max, cerr_max)
+    # Oh and also just make your previous plot (color-luminosity) for low and high mass separately
+    plot_beta(data, sims, "color-luminosity.png")  # update to use plot_binned
     sims.calc_HR()
     plot_beta(data, sims, "color-luminosity.png")
