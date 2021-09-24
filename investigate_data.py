@@ -217,58 +217,119 @@ class Fitres:
         df.to_csv(filename, sep=" ", index=False)
 
 
-def plot_beta(data, sim, filename=""):
+def bin_dataset(data, x, y, c_min=-0.5, bins=25, error_stat=robust_scatter):
     """
-    Note
-    ----
-    The Fitres objects are not extentions to DataFrames (yet). To get
-    to the DataFrame you need to use `Fitres.data`.
+    Parameters
+    -----------
+    data: pandas.DataFrame
+    x: str
+        column for x-axis (binning-axis)
+    y: str
+        column name for y-axis (statistic axis)
+    c_min: float
+        minimum value used in data masking. Defaults to -0.5.
+    bins: int
+        passed to scipy.stats.binned_statistic. Defaults to 25 bins
+        (Not the same as scipy's default.)
+    stat: str, function
+        Passed to scipy.stats.binned_statistic. Defaults to
+        `br_util.stats.robust_scatter`.
     """
-    bins = 25
+    data_mask = data[x] > c_min
+    data_x_axis = data.loc[data_mask, x]
+    data_y_axis = data.loc[data_mask, y]
 
-    fig, ax = new_figure()
-
-    sim_mask = sim.data["c"] > -0.5
-    sim_c = sim.data.loc[sim_mask, "c"]
-    # sim_y_axis = sim.data.loc[sim_mask, "mB"]
-    sim_y_axis = sim.data.loc[sim_mask, "x1_standardized"]
-    data_x = data.data["c"]
-    data_y = data.data["x1_standardized"]
-
-    ax.plot(sim_c, sim_y_axis, ".", markersize=3, alpha=0.3, label="BS21 Simulations")
-    ax.plot(data_x, data_y, ".", markersize=3, alpha=0.3, label="Pantheon+")
-
-    sim_stat, sim_edges, _ = binned_statistic(
-        sim_c, sim_y_axis, statistic="median", bins=bins
-    )
-    sim_error, _, _ = binned_statistic(
-        sim_c, sim_y_axis, statistic=robust_scatter, bins=bins
-    )
     data_stat, data_edges, _ = binned_statistic(
-        data_x, data_y, statistic="median", bins=bins
+        data_x_axis, data_y_axis, statistic="median", bins=bins
     )
     data_error, _, _ = binned_statistic(
-        data_x, data_y, statistic=robust_scatter, bins=bins
+        data_x_axis, data_y_axis, statistic=error_stat, bins=bins
     )
+    return data_x_axis, data_y_axis, data_stat, data_edges, data_error
 
-    ax.errorbar(
-        (sim_edges[:-1] + sim_edges[1:]) / 2,
-        sim_stat,
-        yerr=sim_error,
-        fmt="^",
-        label="Binned Simulations",
-    )
+
+def plot_binned(
+    data,
+    sim=None,
+    x_col="c",
+    y_col="HOST_LOGMASS",
+    show_data=True,
+    split_mass=False,
+    filename="",
+    fig_options={},
+):
+    """plot binned values of data.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+    sim=None : pandas.DataFrame
+        If None, then ignored.
+    x_col : str ("c")
+        DataFrame column name to use for x-axis (axis the bins are applied).
+    y_col : str (""HOST_LOGMASS")
+        DataFrame column name to use for y-axis (axis the summary statistic is applied).
+    show_data: bool (True)
+        If True, show data
+    split_mass: bool (False)
+        Plot data/sims as high and low host stellar mass seperately.
+    filename: str ("")
+        File name to use when saving figure. If left as the empty string,
+        figure is shown but not saved.
+    fig_options : dict
+        Contrains user overrides to be used in figure creation. Keys include
+        "sim_name", "data_name", "x_label", "y_label", "leg_loc".
+    """
+    if split_mass:
+        data_high = data.loc[data["HOST_LOGMASS"] > 10]
+        data_low = data.loc[data["HOST_LOGMASS"] <= 10]
+        if sim is not None:
+            sim_high = sim.loc[sim["HOST_LOGMASS"] > 10]
+            sim_low = sim.loc[sim["HOST_LOGMASS"] <= 10]
+
+    data_x, data_y, data_stat, data_edges, data_error = bin_dataset(data, x_col, y_col)
+    if sim is not None:
+        sim_x, sim_y, sim_stat, sim_edges, sim_error = bin_dataset(sim, x_col, y_col)
+
+    _, ax = new_figure()
+
+    if show_data:
+        if sim is not None:
+            ax.plot(
+                sim_x,
+                sim_y,
+                ".",
+                markersize=3,
+                alpha=0.3,
+                label=fig_options.get("sim_name", "BS21 Simulation"),
+            )
+        ax.plot(
+            data_x,
+            data_y,
+            ".",
+            markersize=3,
+            alpha=0.3,
+            label=fig_options.get("data_name", "Pantheon+"),
+        )
+    if sim is not None:
+        ax.errorbar(
+            (sim_edges[:-1] + sim_edges[1:]) / 2,
+            sim_stat,
+            yerr=sim_error,
+            fmt="^",
+            label="Binned sims",
+        )
     ax.errorbar(
         (data_edges[:-1] + data_edges[1:]) / 2,
         data_stat,
         yerr=data_error,
         fmt="^",
-        label="Binned Data",
+        label="Binned data",
     )
 
-    ax.set_xlabel("c")
-    ax.set_ylabel("mB - mu(z) - 0.15 * x1")
-    ax.legend(fontsize="small")
+    ax.set_xlabel(fig_options.get("x_label", x_col))
+    ax.set_ylabel(fig_options.get("y_label", y_col))
+    ax.legend(fontsize="small", loc=fig_options.get("leg_loc", "best"))
 
     save_plot(filename)
 
@@ -317,7 +378,31 @@ if __name__ == "__main__":
     data.plot_hist("c", f"c_dist.pdf")
     data.plot_hist_c_special("c", f"c_dist_special.pdf")
 
-    # Oh and also just make your previous plot (color-luminosity) for low and high mass separately
-    plot_beta(data, sims, "color-luminosity.png")  # update to use plot_binned
-    sims.calc_HR()
-    plot_beta(data, sims, "color-luminosity.png")
+    # "mB - mu(z) - 0.15 * x1"
+    plot_binned(
+        data.data, sims.data, "c", "x1_standardized", filename="color-luminosity.png"
+    )
+    plot_binned(
+        data.data.loc[data.data["HOST_LOGMASS"] > 10],
+        sims.data.loc[sims.data["HOST_LOGMASS"] > 10],
+        "c",
+        "x1_standardized",
+        filename="color-luminosity-high_mass.png",
+    )
+    plot_binned(
+        data.data.loc[data.data["HOST_LOGMASS"] <= 10],
+        sims.data.loc[sims.data["HOST_LOGMASS"] <= 10],
+        "c",
+        "x1_standardized",
+        filename="color-luminosity-low_mass.png",
+    )
+    plot_binned(data.data, sims.data, "c", "HOST_LOGMASS", filename="mass-color.png")
+    # TODO: currently cutting x-axis of anything <-0.5. This is crazy for host_logmass
+    plot_binned(
+        data.data,
+        sims.data,
+        "HOST_LOGMASS",
+        "c",
+        show_data=False,
+        filename="color-mass.png",
+    )
