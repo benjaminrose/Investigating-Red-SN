@@ -359,7 +359,7 @@ if __name__ == "__main__":
 
     data.slipt_on_c(0.99)
     print("SN at c=1 boundry.")
-    print(data.red_subsample[["CIDint", "IDSURVEY", "c"]])
+    print(data.red_subsample[["CIDint", "IDSURVEY", "c", "x1_standardized"]])
 
     # Work with sim data
     ####
