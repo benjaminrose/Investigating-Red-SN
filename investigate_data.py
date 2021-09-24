@@ -1,5 +1,8 @@
 """ investigate_red_sn.py
 """
+__version__ = "2021-09"
+
+from argparse import ArgumentParser
 from pathlib import Path
 from re import VERBOSE
 
@@ -271,9 +274,16 @@ def plot_beta(data, sim, filename=""):
 
 
 if __name__ == "__main__":
+    arg_parser = ArgumentParser(description=__doc__)
+    arg_parser.add_argument(
+        "-v", "--verbose", action="store_true", help="turn on verbose output"
+    )
+    arg_parser.add_argument("--version", action="version", version=__version__)
+    cli = arg_parser.parse_args()
+
     # Inputs
     data_file = Path("data") / Path("INPUT_FITOPT000.FITRES")
-    VERBOSE = True
+    VERBOSE = cli.verbose
     c_splits = [0.1, 0.3]
     x1_max = 3  # x1 cut is on abs(x1)
     cerr_max = 0.2
