@@ -369,9 +369,17 @@ if __name__ == "__main__":
 
     # Work with sim data
     ####
-    sims = Fitres(Path("data/COMBINED_SIMS.FITRES"))
-    sims.clean_data(x1_max, cerr_max)
-    sims.calc_HR()
+    BS21 = Fitres(Path("data/COMBINED_SIMS.FITRES"))
+    BS21.clean_data(x1_max, cerr_max)
+    BS21.calc_HR()
+
+    G10 = Fitres(Path("data/G10_SIMDATA.FITRES"))
+    G10.clean_data(x1_max, cerr_max)
+    G10.calc_HR()
+
+    C11 = Fitres(Path("data/C11_SIMDATA.FITRES"))
+    C11.clean_data(x1_max, cerr_max)
+    C11.calc_HR()
 
     # Plots
     ###
@@ -384,31 +392,62 @@ if __name__ == "__main__":
     data.plot_hist("c", f"c_dist.pdf")
     data.plot_hist_c_special("c", f"c_dist_special.pdf")
 
-    # "mB - mu(z) - 0.15 * x1"
-    plot_binned(
-        data.data, sims.data, "c", "x1_standardized", filename="color-luminosity.png"
-    )
+    # TODO: Add option to flip y-axis
     plot_binned(
         data.data.loc[data.data["HOST_LOGMASS"] > 10],
-        sims.data.loc[sims.data["HOST_LOGMASS"] > 10],
+        BS21.data.loc[BS21.data["HOST_LOGMASS"] > 10],
         "c",
         "x1_standardized",
         filename="color-luminosity-high_mass.png",
     )
     plot_binned(
         data.data.loc[data.data["HOST_LOGMASS"] <= 10],
-        sims.data.loc[sims.data["HOST_LOGMASS"] <= 10],
+        BS21.data.loc[BS21.data["HOST_LOGMASS"] <= 10],
         "c",
         "x1_standardized",
         filename="color-luminosity-low_mass.png",
     )
-    plot_binned(data.data, sims.data, "c", "HOST_LOGMASS", filename="mass-color.png")
+    plot_binned(data.data, BS21.data, "c", "HOST_LOGMASS", filename="mass-color.png")
     # TODO: currently cutting x-axis of anything <-0.5. This is crazy for host_logmass
     plot_binned(
         data.data,
-        sims.data,
+        BS21.data,
         "HOST_LOGMASS",
         "c",
         show_data=False,
         filename="color-mass.png",
+    )
+
+    plot_binned(
+        data.data,
+        BS21.data,
+        "c",
+        "x1_standardized",
+        filename="color-luminosity-BS21.pdf",
+        fig_options={
+            "sim_name": "C11",
+            "y_label": "mB - mu(z) - 0.15 * x1",
+        },
+    )
+    plot_binned(
+        data.data,
+        G10.data,
+        "c",
+        "x1_standardized",
+        filename="color-luminosity-G10.pdf",
+        fig_options={
+            "sim_name": "G10",
+            "y_label": "mB - mu(z) - 0.15 * x1",
+        },
+    )
+    plot_binned(
+        data.data,
+        C11.data,
+        "c",
+        "x1_standardized",
+        filename="color-luminosity-C11.png",
+        fig_options={
+            "sim_name": "C11",
+            "y_label": "mB - mu(z) - 0.15 * x1",
+        },
     )
