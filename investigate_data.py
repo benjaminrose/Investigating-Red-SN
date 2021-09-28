@@ -9,7 +9,7 @@ from re import VERBOSE
 from astropy.cosmology import wCDM
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.stats import binned_statistic
+from scipy.stats import binned_statistic, ks_2samp
 import seaborn as sns
 
 from br_util.stats import robust_scatter
@@ -338,6 +338,15 @@ def plot_binned(
     ax.legend(fontsize="small", loc=fig_options.get("leg_loc", "best"))
 
     save_plot(filename)
+
+    ks, p = ks_2samp(data_stat, sim_stat)
+    print(f"For {filename},\nKS-test of binned stats: {ks}, p={p:.5f}")
+    chi_square = np.nansum(
+        (data_stat - sim_stat) ** 2 / (sim_error ** 2 + data_error ** 2)
+    )
+    print(f"reduced chi-2 binned stats: {chi_square/bins:.3f}\n")
+    # I want the Mann-Whitney-U of the data in each bin.
+    # Then somehow compute a single value from the 25 Mann-Whitney-U values.
 
 
 if __name__ == "__main__":
