@@ -228,7 +228,7 @@ def bin_dataset(data, x, y, c_min=-0.5, bins=25, error_stat=robust_scatter):
         column name for y-axis (statistic axis)
     c_min: float
         minimum value used in data masking. Defaults to -0.5.
-    bins: int
+    bins: int or sequence of scalars
         passed to scipy.stats.binned_statistic. Defaults to 25 bins
         (Not the same as scipy's default.)
     stat: str, function
@@ -280,6 +280,8 @@ def plot_binned(
         Contrains user overrides to be used in figure creation. Keys include
         "sim_name", "data_name", "x_label", "y_label", "leg_loc".
     """
+    bins = 25
+
     if split_mass:
         data_high = data.loc[data["HOST_LOGMASS"] > 10]
         data_low = data.loc[data["HOST_LOGMASS"] <= 10]
@@ -287,9 +289,13 @@ def plot_binned(
             sim_high = sim.loc[sim["HOST_LOGMASS"] > 10]
             sim_low = sim.loc[sim["HOST_LOGMASS"] <= 10]
 
-    data_x, data_y, data_stat, data_edges, data_error = bin_dataset(data, x_col, y_col)
+    data_x, data_y, data_stat, data_edges, data_error = bin_dataset(
+        data, x_col, y_col, bins=bins
+    )
     if sim is not None:
-        sim_x, sim_y, sim_stat, sim_edges, sim_error = bin_dataset(sim, x_col, y_col)
+        sim_x, sim_y, sim_stat, sim_edges, sim_error = bin_dataset(
+            sim, x_col, y_col, bins=data_edges
+        )
 
     _, ax = new_figure()
 
@@ -301,7 +307,7 @@ def plot_binned(
                 ".",
                 markersize=3,
                 alpha=0.3,
-                label=fig_options.get("sim_name", "BS21 Simulation"),
+                label=fig_options.get("sim_name", "Simulation"),
             )
         ax.plot(
             data_x,
@@ -317,13 +323,13 @@ def plot_binned(
             sim_stat,
             yerr=sim_error,
             fmt="^",
-            label="Binned sims",
+            label="Binned simulation",
         )
     ax.errorbar(
         (data_edges[:-1] + data_edges[1:]) / 2,
         data_stat,
         yerr=data_error,
-        fmt="^",
+        fmt=">",
         label="Binned data",
     )
 
