@@ -17,3 +17,5 @@ dependencies:
   - scipy
   - seaborn
   - pip
+    - git+https://github.com/jmeyers314/linmix.git
+    - git+~/Documents/computing/br-util.git
