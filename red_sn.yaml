@@ -18,4 +18,4 @@ dependencies:
   - seaborn
   - pip
     - git+https://github.com/jmeyers314/linmix.git
-    - git+~/Documents/computing/br-util.git
+    - git+https://github.com/benjaminrose/br_util.git 
