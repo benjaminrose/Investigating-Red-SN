@@ -1,16 +1,19 @@
 """ investigate_red_sn.py
+
+Requires python 3.9
 """
 __version__ = "2021-09"
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, BooleanOptionalAction
 from pathlib import Path
-from re import VERBOSE
 
 from astropy.cosmology import wCDM
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import binned_statistic, ks_2samp
 import seaborn as sns
+
+import linmix
 
 from br_util.stats import robust_scatter
 from br_util.snana import read_data
@@ -53,6 +56,12 @@ class Fitres:
         self.data["x1_standardized"] = (
             self.data["mB"] - self.data["mu_theory"] - self.alpha * self.data["x1"]
         )
+        self.data["x1_standardized_ERR"] = np.sqrt(
+            # mb error, no cosmology error, x1 error
+            self.data["mBERR"] ** 2
+            + 0
+            + (self.alpha * self.data["x1ERR"]) ** 2
+        )
         self.data["HR_naive"] = (
             self.data["mB"]
             + self.alpha * self.data["x1"]
@@ -67,12 +76,31 @@ class Fitres:
             )
         return self.data
 
-    def clean_data(self, x1_max=5, cerr_max=1):
+    def calc_RV(self):
+        self.data["RV"] = (self.data["x1_standardized"] + self.M0) / (
+            self.data["c"] + 0.1
+        )
+        return self.data
+
+    def clean_data(self, x1err_max=2.0, x1_max=5, cerr_max=1, c_min=-0.5):
+        self._cut_x1err(x1err_max)
         self._cut_x1(x1_max)
         self._cut_cerr(cerr_max)
+        self._cut_c(c_min)
         return self
 
+    def _cut_c(self, c_min):
+        if self.VERBOSE:
+            print(f"Initial c distribution:\n{self.data[['c', 'cERR']].describe()}\n")
+        self.data = self.data[c_min < self.data["c"]]
+        if self.VERBOSE:
+            print(
+                f"After-cuts c distribution:\n{self.data[['c', 'cERR']].describe()}\n"
+            )
+        return self.data
+
     def _cut_cerr(self, cerr_max):
+        # TODO: refactor to pass value and key rather than a function for both x1 and c.
         if self.VERBOSE:
             print(
                 f"Initial cERR distribution:\n{self.data[['c', 'cERR']].describe()}\n"
@@ -90,6 +118,18 @@ class Fitres:
         self.data = self.data[np.abs(self.data["x1"]) <= x1_max]
         if self.VERBOSE:
             print(f"After-cuts x1 distribution:\n{self.data['x1'].describe()}\n")
+        return self.data
+
+    def _cut_x1err(self, x1err_max):
+        if self.VERBOSE:
+            print(
+                f"Initial cERR distribution:\n{self.data[['x1', 'x1ERR']].describe()}\n"
+            )
+        self.data = self.data[np.abs(self.data["x1ERR"]) <= x1err_max]
+        if self.VERBOSE:
+            print(
+                f"After-cuts cERR distribution:\n{self.data[['x1', 'x1ERR']].describe()}\n"
+            )
         return self.data
 
     def plot_beta_ben(self, save=True):
@@ -130,6 +170,53 @@ class Fitres:
 
         save_plot("color-luminosity-naive.pdf")
 
+    def plot_fitprob_c(self, fitprob_cut=0.01):
+        _, ax = new_figure()
+
+        fail = self.data["FITPROB"] < fitprob_cut
+        ax.plot(self.data["c"], self.data["FITPROB"], ".", label="Passes")
+        ax.plot(
+            self.data.loc[fail, "c"], self.data.loc[fail, "FITPROB"], ".", label="Fails"
+        )
+
+        ax.set_xlabel("SALT2 c")
+        ax.set_ylabel("SNANA Fit Probability")
+        plt.legend()
+        save_plot("color-fitprob.pdf")
+
+    def plot_fitprob_binned_c(self, fitprob_cut=0.01):
+        # data, x, y, c_min=-0.5, bins=25, error_stat=robust_scatter
+        # data_x, data_y, data_stat, data_edges, data_error = bin_dataset(self.data, "c",
+
+        data, x, y, bins = self.data, "c", "FITPROB", 25  ## passed to bin_dataset
+        data_mask = data[x] > -0.5
+        data_x_axis = data.loc[data_mask, x]
+        data_y_axis = data.loc[data_mask, y]
+        statistic = lambda x: len(x[x > fitprob_cut]) / len(
+            x
+        )  # Not possible with bin_dataset
+
+        data_stat, data_edges, _ = binned_statistic(
+            data_x_axis, data_y_axis, statistic=statistic, bins=bins
+        )
+        # data_error, _, _ = binned_statistic(
+        #     data_x_axis, data_y_axis, statistic=error_stat, bins=bins
+        # )
+
+        _, ax = new_figure()
+
+        ax.errorbar(
+            (data_edges[:-1] + data_edges[1:]) / 2,
+            data_stat * 100,  # Make a percent
+            fmt="*",
+            label=f"Percent with FITPROB > {fitprob_cut}",
+        )
+
+        ax.set_xlabel("c")
+        ax.set_ylabel("Percent pass")
+        plt.legend()
+        save_plot("fitprob_c.pdf")
+
     def plot_hist(self, key, filename=""):
         new_figure()
         ax = sns.histplot(
@@ -137,8 +224,12 @@ class Fitres:
             x=key,
             color="b",
             cumulative=False,
+            bins="auto",
+            element="step",
             # **self.histplot_keywords,
         )
+        if key == "c":
+            ax.set_yscale("log")
         save_plot(filename)
 
     def plot_hist_c_special(self, key, filename=""):
@@ -217,7 +308,7 @@ class Fitres:
         df.to_csv(filename, sep=" ", index=False)
 
 
-def bin_dataset(data, x, y, c_min=-0.5, bins=25, error_stat=robust_scatter):
+def bin_dataset(data, x, y, x_min=-0.5, bins=25, error_stat=robust_scatter):
     """
     Parameters
     -----------
@@ -226,8 +317,8 @@ def bin_dataset(data, x, y, c_min=-0.5, bins=25, error_stat=robust_scatter):
         column for x-axis (binning-axis)
     y: str
         column name for y-axis (statistic axis)
-    c_min: float
-        minimum value used in data masking. Defaults to -0.5.
+    x_min: float
+        minimum value of x column, used in data masking. Defaults to -0.5.
     bins: int or sequence of scalars
         passed to scipy.stats.binned_statistic. Defaults to 25 bins
         (Not the same as scipy's default.)
@@ -235,7 +326,7 @@ def bin_dataset(data, x, y, c_min=-0.5, bins=25, error_stat=robust_scatter):
         Passed to scipy.stats.binned_statistic. Defaults to
         `br_util.stats.robust_scatter`.
     """
-    data_mask = data[x] > c_min
+    data_mask = data[x] > x_min
     data_x_axis = data.loc[data_mask, x]
     data_y_axis = data.loc[data_mask, y]
 
@@ -253,6 +344,7 @@ def plot_binned(
     sim=None,
     x_col="c",
     y_col="HOST_LOGMASS",
+    fit=None,
     show_data=True,
     split_mass=False,
     filename="",
@@ -269,6 +361,8 @@ def plot_binned(
         DataFrame column name to use for x-axis (axis the bins are applied).
     y_col : str (""HOST_LOGMASS")
         DataFrame column name to use for y-axis (axis the summary statistic is applied).
+    fit : linmix.LinMix.chain (None)
+        The linear fit. Assumes it is from `linmix`. Does not plot anything value is None.
     show_data: bool (True)
         If True, show data
     split_mass: bool (False)
@@ -277,8 +371,8 @@ def plot_binned(
         File name to use when saving figure. If left as the empty string,
         figure is shown but not saved.
     fig_options : dict
-        Contrains user overrides to be used in figure creation. Keys include
-        "sim_name", "data_name", "x_label", "y_label", "leg_loc".
+        Contrains user overrides to be used in figure creation. Keys are
+        "sim_name", "data_name", "x_label", "y_label", "y_flip", "y_lim", "leg_loc".
     """
     bins = 25
 
@@ -333,9 +427,31 @@ def plot_binned(
         label="Binned data",
     )
 
+    if fit is not None:
+        xs = np.arange(data_x.min(), data_x.max())
+        # only plot every 25 chains. For 2000 chains, this is 4%
+        downsample_frac = 0.15  # 5--10% may be better for a long chain
+        # // floors it but still keeps it as a float.
+        for i in range(0, len(fit), round((len(fit) / downsample_frac) / len(fit))):
+            ys = fit[i]["alpha"] + xs * fit[i]["beta"]
+            ax.plot(xs, ys, color="0.5", alpha=0.02)
+        ys = np.median(fit["alpha"]) + xs * np.median(fit["beta"])
+        ax.plot(
+            xs,
+            ys,
+            color="k",
+            label=r"$\beta=$"
+            + f"{np.median(fit['beta']):.2f}"
+            + r" $\pm$ "
+            + f"{robust_scatter(fit['beta']):.2f}",
+        )
+
+    if fig_options.get("y_flip", False):
+        ax.invert_yaxis()
     ax.set_xlabel(fig_options.get("x_label", x_col))
     ax.set_ylabel(fig_options.get("y_label", y_col))
-    ax.legend(fontsize="small", loc=fig_options.get("leg_loc", "best"))
+    ax.set_ylim(fig_options.get("ylim", ax.get_ylim()))
+    ax.legend(fontsize="x-small", loc=fig_options.get("leg_loc", "best"))
 
     save_plot(filename)
 
@@ -355,59 +471,107 @@ if __name__ == "__main__":
         "-v", "--verbose", action="store_true", help="turn on verbose output"
     )
     arg_parser.add_argument("--version", action="version", version=__version__)
+    arg_parser.add_argument(
+        "--rv", action=BooleanOptionalAction, default=False
+    )  # python 3.9
     cli = arg_parser.parse_args()
 
     # Inputs
     data_file = Path("data") / Path("INPUT_FITOPT000.FITRES")
     VERBOSE = cli.verbose
-    c_splits = [0.1, 0.3]
+    RUN_LINMIX = cli.rv
+    LINMIX_MIN_ITR = (
+        2000  # defaults to 5000, 2000 is good for our our data set, 500 for fast
+    )
+    print(cli.rv)
+    c_splits = [0.3]  # was [0.1, 0.3] during initial analysis
+    x1err_max = 1.0
     x1_max = 3  # x1 cut is on abs(x1)
     cerr_max = 0.2
+    c_min = -0.3
     # fitprob_min = 0.1
     COSMO = wCDM(H0=70, Om0=0.3, Ode0=0.7, w0=-1)
 
     # Import and clean data
     ####
     data = Fitres(data_file, VERBOSE)
-    data.clean_data(x1_max, cerr_max)
+    data.clean_data(x1err_max, x1_max, cerr_max, c_min)
     data.calc_HR()
+    data.calc_RV()
+
+    print(f"There are {data.data.loc[data.data['c']>0.3, 'c'].shape[0]} SN with c>0.3")
 
     data.slipt_on_c(0.99)
-    print("SN at c=1 boundry.")
-    print(data.red_subsample[["CIDint", "IDSURVEY", "c", "x1_standardized"]])
+    print("SN affected by c=1 boundry.")
+    print(
+        data.red_subsample[
+            [
+                "CIDint",
+                "IDSURVEY",
+                "c",
+                "cERR",
+                "x1_standardized",
+                "x1_standardized_ERR",
+                "RV",
+            ]
+        ]
+    )
+
+    if RUN_LINMIX:
+        lm = linmix.LinMix(
+            x=data.data["c"],
+            y=data.data["x1_standardized"],
+            xsig=data.data["cERR"],
+            ysig=data.data["x1_standardized_ERR"],
+        )
+        lm.run_mcmc(
+            miniter=LINMIX_MIN_ITR
+        )  # can do  silent=(not VERBOSE) once up and running.
+        print(
+            f"Beta = {np.median(lm.chain['beta']):.3f} +/- {robust_scatter(lm.chain['beta']):.3f}\n"
+        )
 
     # Work with sim data
     ####
     BS21 = Fitres(Path("data/COMBINED_SIMS.FITRES"))
-    BS21.clean_data(x1_max, cerr_max)
+    BS21.clean_data(x1err_max, x1_max, cerr_max, c_min)
     BS21.calc_HR()
 
     G10 = Fitres(Path("data/G10_SIMDATA.FITRES"))
-    G10.clean_data(x1_max, cerr_max)
+    G10.clean_data(x1err_max, x1_max, cerr_max, c_min)
     G10.calc_HR()
 
     C11 = Fitres(Path("data/C11_SIMDATA.FITRES"))
-    C11.clean_data(x1_max, cerr_max)
+    C11.clean_data(x1err_max, x1_max, cerr_max, c_min)
     C11.calc_HR()
 
     # Plots
     ###
     for c_split in c_splits:
         data.slipt_on_c(c_split)
-        data.plot_hists("FITPROB", f"fitprob_dist_{c_split}.pdf")
+        # data.plot_hists("FITPROB", f"fitprob_dist_{c_split}.pdf")  # Not in paper
         data.plot_hists("x1", f"x1_dist_{c_split}.pdf")
         data.plot_hists("HOST_LOGMASS", f"mass_dist_{c_split}.pdf")
 
-    data.plot_hist("c", f"c_dist.pdf")
-    data.plot_hist_c_special("c", f"c_dist_special.pdf")
+    # data.plot_fitprob_c()   # Not in paper
+    data.plot_fitprob_binned_c()
 
-    # TODO: Add option to flip y-axis
+    data.plot_hist("c", f"c_dist.pdf")
+    # data.plot_hist_c_special("c", f"c_dist_special.pdf")   # Not in paper
+
     plot_binned(
         data.data.loc[data.data["HOST_LOGMASS"] > 10],
         BS21.data.loc[BS21.data["HOST_LOGMASS"] > 10],
         "c",
         "x1_standardized",
         filename="color-luminosity-high_mass.png",
+        fig_options={
+            "data_name": "High Mass Host",
+            "sim_name": "BS21",
+            # "y_label": "mB - mu(z) - 0.15 * x1",
+            "y_label": r"M$'$",
+            "y_flip": True,
+        },
     )
     plot_binned(
         data.data.loc[data.data["HOST_LOGMASS"] <= 10],
@@ -415,27 +579,46 @@ if __name__ == "__main__":
         "c",
         "x1_standardized",
         filename="color-luminosity-low_mass.png",
+        fig_options={
+            "data_name": "Low Mass Host",
+            "sim_name": "BS21",
+            "y_label": r"M$'$",
+            "y_flip": True,
+        },
     )
-    plot_binned(data.data, BS21.data, "c", "HOST_LOGMASS", filename="mass-color.png")
-    # TODO: currently cutting x-axis of anything <-0.5. This is crazy for host_logmass
     plot_binned(
         data.data,
         BS21.data,
-        "HOST_LOGMASS",
         "c",
-        show_data=False,
-        filename="color-mass.png",
+        "HOST_LOGMASS",
+        filename="mass-color.png",
+        fig_options={
+            "sim_name": "BS21",
+            "y_label": r"$\log(M_{*})$",
+            "ylim": [6.5, 13.5],
+        },
     )
+    # # TODO: currently cutting x-axis of anything <-0.5. This is crazy for host_logmass
+    # plot_binned(
+    #     data.data,
+    #     BS21.data,
+    #     "HOST_LOGMASS",
+    #     "c",
+    #     show_data=False,
+    #     filename="color-mass.png",   # Not in paper
+    # )
 
     plot_binned(
         data.data,
         BS21.data,
         "c",
         "x1_standardized",
-        filename="color-luminosity-BS21.pdf",
+        fit=lm.chain,
+        filename="color-luminosity-BS21.png",
         fig_options={
-            "sim_name": "C11",
-            "y_label": "mB - mu(z) - 0.15 * x1",
+            "sim_name": "BS21",
+            "y_label": r"M$'$",
+            "y_flip": True,
         },
     )
     plot_binned(
@@ -443,10 +626,11 @@ if __name__ == "__main__":
         G10.data,
         "c",
         "x1_standardized",
-        filename="color-luminosity-G10.pdf",
+        filename="color-luminosity-G10.png",
         fig_options={
             "sim_name": "G10",
-            "y_label": "mB - mu(z) - 0.15 * x1",
+            "y_label": r"M$'$",
+            "y_flip": True,
         },
     )
     plot_binned(
@@ -457,6 +641,7 @@ if __name__ == "__main__":
         filename="color-luminosity-C11.png",
         fig_options={
             "sim_name": "C11",
-            "y_label": "mB - mu(z) - 0.15 * x1",
+            "y_label": r"M$'$",
+            "y_flip": True,
         },
     )
