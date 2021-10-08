@@ -569,7 +569,7 @@ if __name__ == "__main__":
             "data_name": "High Mass Host",
             "sim_name": "BS21",
             # "y_label": "mB - mu(z) - 0.15 * x1",
-            "y_label": r"M$'$",
+            "y_label": r"M$'$ (mag)",
             "y_flip": True,
         },
     )
@@ -582,7 +582,7 @@ if __name__ == "__main__":
         fig_options={
             "data_name": "Low Mass Host",
             "sim_name": "BS21",
-            "y_label": r"M$'$",
+            "y_label": r"M$'$ (mag)",
             "y_flip": True,
         },
     )
@@ -617,7 +617,7 @@ if __name__ == "__main__":
         filename="color-luminosity-BS21.png",
         fig_options={
             "sim_name": "BS21",
-            "y_label": r"M$'$",
+            "y_label": r"M$'$ (mag)",
             "y_flip": True,
         },
     )
@@ -629,7 +629,7 @@ if __name__ == "__main__":
         filename="color-luminosity-G10.png",
         fig_options={
             "sim_name": "G10",
-            "y_label": r"M$'$",
+            "y_label": r"M$'$ (mag)",
             "y_flip": True,
         },
     )
@@ -641,7 +641,7 @@ if __name__ == "__main__":
         filename="color-luminosity-C11.png",
         fig_options={
             "sim_name": "C11",
-            "y_label": r"M$'$",
+            "y_label": r"M$'$ (mag)",
             "y_flip": True,
         },
     )
