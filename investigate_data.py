@@ -24,7 +24,7 @@ sns.set(context="talk", style="ticks", font="serif", color_codes=True)
 
 class Fitres:
     # should this subclass pandas?
-    def __init__(self, file_path, verbose=False):
+    def __init__(self, file_path, alpha=0.15, verbose=False):
         self.data = read_data(file_path, 1, verbose)
         self.VERBOSE = verbose
         # Keywords used in plotting both data sets
@@ -37,7 +37,7 @@ class Fitres:
             "stat": "density",
         }
         self.M0 = -19.34
-        self.alpha = 0.15
+        self.alpha = alpha
         self.beta = 3.1
 
     def calc_HR(self):
@@ -474,6 +474,12 @@ if __name__ == "__main__":
     arg_parser.add_argument(
         "--rv", action=BooleanOptionalAction, default=False
     )  # python 3.9
+    arg_parser.add_argument(
+        "--alpha",
+        type=float,
+        default=0.15,
+        help="used for light-curve shape standardization (default: %(default)s)",
+    )
     cli = arg_parser.parse_args()
 
     # Inputs
@@ -490,11 +496,12 @@ if __name__ == "__main__":
     cerr_max = 0.2
     c_min = -0.3
     # fitprob_min = 0.1
+    alpha = cli.alpha
     COSMO = wCDM(H0=70, Om0=0.3, Ode0=0.7, w0=-1)
 
     # Import and clean data
     ####
-    data = Fitres(data_file, VERBOSE)
+    data = Fitres(data_file, alpha, VERBOSE)
     data.clean_data(x1err_max, x1_max, cerr_max, c_min)
     data.calc_HR()
     data.calc_RV()
@@ -533,15 +540,15 @@ if __name__ == "__main__":
 
     # Work with sim data
     ####
-    BS21 = Fitres(Path("data/COMBINED_SIMS.FITRES"))
+    BS21 = Fitres(Path("data/COMBINED_SIMS.FITRES"), alpha)
     BS21.clean_data(x1err_max, x1_max, cerr_max, c_min)
     BS21.calc_HR()
 
-    G10 = Fitres(Path("data/G10_SIMDATA.FITRES"))
+    G10 = Fitres(Path("data/G10_SIMDATA.FITRES"), alpha)
     G10.clean_data(x1err_max, x1_max, cerr_max, c_min)
     G10.calc_HR()
 
-    C11 = Fitres(Path("data/C11_SIMDATA.FITRES"))
+    C11 = Fitres(Path("data/C11_SIMDATA.FITRES"), alpha)
     C11.clean_data(x1err_max, x1_max, cerr_max, c_min)
     C11.calc_HR()
 
