@@ -247,17 +247,22 @@ class Fitres:
     def plot_hists(self, key="FITPROB", filename=""):
         new_figure()
 
+        sub_set1 = self.blue_subsample[
+            ~self.blue_subsample.index.duplicated(keep="first")
+        ]
+        sub_set2 = self.red_subsample[
+            ~self.red_subsample.index.duplicated(keep="first")
+        ]
+
         ax = sns.histplot(
-            data=self.blue_subsample[
-                ~self.blue_subsample.index.duplicated(keep="first")
-            ],
+            data=sub_set1,
             label=f"c <= {self.c_split}",
             x=key,
             color="b",
             **self.histplot_keywords,
         )
         sns.histplot(
-            data=self.red_subsample[~self.red_subsample.index.duplicated(keep="first")],
+            data=sub_set2,
             x=key,
             ax=ax,
             label=f"c > {self.c_split}",
@@ -265,6 +270,11 @@ class Fitres:
             **self.histplot_keywords,
         )
         plt.legend()
+
+        print(
+            f"KS test (two-sided) p-value for {filename}: {ks_2samp(sub_set1[key], sub_set2[key])[1]}."
+        )
+
         save_plot(filename)
 
     def slipt_on_c(self, c_split):
