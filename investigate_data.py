@@ -322,7 +322,7 @@ class Fitres:
         df.to_csv(filename, sep=" ", index=False)
 
 
-def bin_dataset(data, x, y, x_min=-0.5, bins=25, error_stat=robust_scatter):
+def bin_dataset(data, x, y, bins=25, error_stat=robust_scatter):
     """
     Parameters
     -----------
@@ -331,8 +331,6 @@ def bin_dataset(data, x, y, x_min=-0.5, bins=25, error_stat=robust_scatter):
         column for x-axis (binning-axis)
     y: str
         column name for y-axis (statistic axis)
-    x_min: float
-        minimum value of x column, used in data masking. Defaults to -0.5.
     bins: int or sequence of scalars
         passed to scipy.stats.binned_statistic. Defaults to 25 bins
         (Not the same as scipy's default.)
@@ -340,9 +338,8 @@ def bin_dataset(data, x, y, x_min=-0.5, bins=25, error_stat=robust_scatter):
         Passed to scipy.stats.binned_statistic. Defaults to
         `br_util.stats.robust_scatter`.
     """
-    data_mask = data[x] > x_min
-    data_x_axis = data.loc[data_mask, x]
-    data_y_axis = data.loc[data_mask, y]
+    data_x_axis = data[x]
+    data_y_axis = data[y]
 
     data_stat, data_edges, _ = binned_statistic(
         data_x_axis, data_y_axis, statistic="median", bins=bins
