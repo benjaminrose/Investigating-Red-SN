@@ -10,6 +10,7 @@ from pathlib import Path
 from astropy.cosmology import wCDM
 import matplotlib.pyplot as plt
 import numpy as np
+from numpy.polynomial import Polynomial
 from scipy.stats import binned_statistic, ks_2samp
 import seaborn as sns
 
@@ -441,7 +442,17 @@ def plot_binned(
     )
 
     if fit is not None:
-        xs = np.arange(data_x.min(), data_x.max())
+        # relevantly bring in global constant (from CLI) into local scope.
+        if C_MAX_FIT > data_x.max():
+            print(
+                f"{C_MAX_FIT = } is above {data_x.max() = }. Plot of linear fit will not go past the data."
+            )
+            c_max_fit = data_x.max()
+        else:
+            c_max_fit = C_MAX_FIT
+
+        xs = np.arange(data_x.min(), c_max_fit, 0.01)
+
         # only plot every 25 chains. For 2000 chains, this is 4%
         downsample_frac = 0.15  # 5--10% may be better for a long chain
         # // floors it but still keeps it as a float.
@@ -458,6 +469,18 @@ def plot_binned(
             + r" $\pm$ "
             + f"{robust_scatter(fit['beta']):.2f}",
         )
+        ax.plot(
+            xs,
+            linear_fit.convert().coef[0] + xs * linear_fit.convert().coef[1],
+            label="Linear Least-Squares",
+        )
+        ax.plot(
+            xs,
+            quadratic_fit.convert().coef[0]
+            + xs * quadratic_fit.convert().coef[1]
+            + xs ** 2 * quadratic_fit.convert().coef[2],
+            label="Quadratic Least-Squares",
+        )
 
     if fig_options.get("y_flip", False):
         ax.invert_yaxis()
@@ -468,24 +491,37 @@ def plot_binned(
 
     save_plot(filename)
 
-    ks, p = ks_2samp(data_stat, sim_stat)
-    print(f"For {filename},\nKS-test of binned stats: {ks}, p={p:.5f}")
-    chi_square = np.nansum(
-        (data_stat - sim_stat) ** 2 / (sim_error ** 2 + data_error ** 2)
-    )
-    print(f"reduced chi-2 binned stats: {chi_square/bins:.3f}\n")
-    # I want the Mann-Whitney-U of the data in each bin.
-    # Then somehow compute a single value from the 25 Mann-Whitney-U values.
+    if sim is not None:
+        ks, p = ks_2samp(data_stat, sim_stat)
+        print(f"For {filename},\nKS-test of binned stats: {ks}, p={p:.5f}")
+        chi_square = np.nansum(
+            (data_stat - sim_stat) ** 2 / (sim_error ** 2 + data_error ** 2)
+        )
+        print(f"reduced chi-2 binned stats: {chi_square/bins:.3f}\n")
+        # I want the Mann-Whitney-U of the data in each bin.
+        # Then somehow compute a single value from the 25 Mann-Whitney-U values.
 
 
 if __name__ == "__main__":
     arg_parser = ArgumentParser(description=__doc__)
     arg_parser.add_argument(
-        "-v", "--verbose", action="store_true", help="turn on verbose output"
+        "--bins",
+        type=int,
+        default=25,
+        help="number of bins to use in color-luminosity plot (default: %(default)s)",
+    )
+    arg_parser.add_argument(
+        "--cmax",
+        type=float,
+        default=2.0,
+        help="maximum c used in fitting BETA (default: %(default)s)",
     )
     arg_parser.add_argument("--version", action="version", version=__version__)
     arg_parser.add_argument(
-        "--rv", action=BooleanOptionalAction, default=False
+        "--linmix",
+        action=BooleanOptionalAction,
+        default=False,
+        help="run LINMIX to fit for BETA",
     )  # python 3.9
     arg_parser.add_argument(
         "--alpha",
@@ -493,21 +529,28 @@ if __name__ == "__main__":
         default=0.15,
         help="used for light-curve shape standardization (default: %(default)s)",
     )
+    arg_parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="turn on verbose output (default: %(default)s)",
+    )
+
     cli = arg_parser.parse_args()
 
     # Inputs
     data_file = Path("data") / Path("INPUT_FITOPT000.FITRES")
     VERBOSE = cli.verbose
-    RUN_LINMIX = cli.rv
+    RUN_LINMIX = cli.linmix
     LINMIX_MIN_ITR = (
         2000  # defaults to 5000, 2000 is good for our our data set, 500 for fast
     )
-    print(cli.rv)
     c_splits = [0.3]  # was [0.1, 0.3] during initial analysis
     x1err_max = 1.0
     x1_max = 3  # x1 cut is on abs(x1)
     cerr_max = 0.2
     c_min = -0.3
+    C_MAX_FIT = cli.cmax
     # fitprob_min = 0.1
     alpha = cli.alpha
     COSMO = wCDM(H0=70, Om0=0.3, Ode0=0.7, w0=-1)
@@ -537,12 +580,13 @@ if __name__ == "__main__":
         ]
     )
 
+    fit_mask = data.data["c"] <= C_MAX_FIT
     if RUN_LINMIX:
         lm = linmix.LinMix(
-            x=data.data["c"],
-            y=data.data["x1_standardized"],
-            xsig=data.data["cERR"],
-            ysig=data.data["x1_standardized_ERR"],
+            x=data.data.loc[fit_mask, "c"],
+            y=data.data.loc[fit_mask, "x1_standardized"],
+            xsig=data.data.loc[fit_mask, "cERR"],
+            ysig=data.data.loc[fit_mask, "x1_standardized_ERR"],
         )
         lm.run_mcmc(
             miniter=LINMIX_MIN_ITR
@@ -550,6 +594,38 @@ if __name__ == "__main__":
         print(
             f"Beta = {np.median(lm.chain['beta']):.3f} +/- {robust_scatter(lm.chain['beta']):.3f}\n"
         )
+        fit = lm.chain
+    else:
+        lm = None
+        fit = None
+
+    # if cERR << x1_standardized_ERR
+    # use .convert cause numpy's default is dumb.
+    # https://numpy.org/doc/stable/reference/routines.polynomials.html#transition-guide
+    linear_fit, lin_error = Polynomial.fit(
+        x=data.data.loc[fit_mask, "c"],
+        y=data.data.loc[fit_mask, "x1_standardized"],
+        w=data.data.loc[fit_mask, "x1_standardized_ERR"],
+        full=True,
+        deg=1,
+    )
+    quadratic_fit, quad_error = Polynomial.fit(
+        x=data.data.loc[fit_mask, "c"],
+        y=data.data.loc[fit_mask, "x1_standardized"],
+        w=data.data.loc[fit_mask, "x1_standardized_ERR"],
+        full=True,
+        deg=2,
+    )
+    cubic_fit, cubic_error = Polynomial.fit(
+        x=data.data.loc[fit_mask, "c"],
+        y=data.data.loc[fit_mask, "x1_standardized"],
+        w=data.data.loc[fit_mask, "x1_standardized_ERR"],
+        full=True,
+        deg=3,
+    )
+    print(linear_fit.convert(), lin_error)
+    print(quadratic_fit.convert(), quad_error)
+    print(cubic_fit.convert(), cubic_error)
 
     # Work with sim data
     ####
@@ -633,7 +709,7 @@ if __name__ == "__main__":
         BS21.data,
         "c",
         "x1_standardized",
-        fit=lm.chain,
+        fit=fit,
         filename="color-luminosity-BS21.png",
         fig_options={
             "sim_name": "BS21",
