@@ -503,6 +503,7 @@ def plot_binned(
 
 if __name__ == "__main__":
     arg_parser = ArgumentParser(description=__doc__)
+    arg_parser.add_argument("--version", action="version", version=__version__)
     arg_parser.add_argument(
         "--bins",
         type=int,
@@ -515,7 +516,6 @@ if __name__ == "__main__":
         default=2.0,
         help="maximum c used in fitting BETA (default: %(default)s)",
     )
-    arg_parser.add_argument("--version", action="version", version=__version__)
     arg_parser.add_argument(
         "--linmix",
         action=BooleanOptionalAction,
@@ -562,6 +562,12 @@ if __name__ == "__main__":
     data.calc_RV()
 
     print(f"There are {data.data.loc[data.data['c']>0.3, 'c'].shape[0]} SN with c>0.3")
+    print(
+        f"There are {data.data.loc[np.logical_and(data.data['c']>0.3, data.data['c']<=1.0), 'c'].shape[0]} SN with 0.3 < c <= 1.0"
+    )
+    print(
+        f"There are {data.data.loc[data.data['c']>1.0, 'c'].shape[0]} SN with c > 1.0"
+    )
 
     data.slipt_on_c(0.99)
     print("SN affected by c=1 boundry.")
@@ -661,11 +667,13 @@ if __name__ == "__main__":
         y_col="x1_standardized",
         filename="color-luminosity-high_mass.png",
         fig_options={
-            "data_name": "High Mass Host",
+            "data_name": "High Mass Hosts",
             "sim_name": "BS21",
+            # TODO: define this elsewhere rather than copy and paste.
             # "y_label": "mB - mu(z) - 0.15 * x1",
             "y_label": r"M$'$ (mag)",
             "y_flip": True,
+            "ylim": [-14.5, -21.5],
         },
     )
     plot_binned(
@@ -675,10 +683,11 @@ if __name__ == "__main__":
         y_col="x1_standardized",
         filename="color-luminosity-low_mass.png",
         fig_options={
-            "data_name": "Low Mass Host",
+            "data_name": "Low Mass Hosts",
             "sim_name": "BS21",
             "y_label": r"M$'$ (mag)",
             "y_flip": True,
+            "ylim": [-14.5, -21.5],
         },
     )
     plot_binned(
