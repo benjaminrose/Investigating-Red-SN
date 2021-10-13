@@ -418,6 +418,7 @@ def plot_binned(
             data_x,
             data_y,
             ".",
+            color="tab:orange",
             markersize=3,
             alpha=0.3,
             label=fig_options.get("data_name", "Pantheon+"),
@@ -434,6 +435,7 @@ def plot_binned(
         (data_edges[:-1] + data_edges[1:]) / 2,
         data_stat,
         yerr=data_error,
+        color="r",
         fmt=">",
         label="Binned data",
     )
@@ -655,8 +657,8 @@ if __name__ == "__main__":
     plot_binned(
         data.data.loc[data.data["HOST_LOGMASS"] > 10],
         BS21.data.loc[BS21.data["HOST_LOGMASS"] > 10],
-        "c",
-        "x1_standardized",
+        x_col="c",
+        y_col="x1_standardized",
         filename="color-luminosity-high_mass.png",
         fig_options={
             "data_name": "High Mass Host",
@@ -669,8 +671,8 @@ if __name__ == "__main__":
     plot_binned(
         data.data.loc[data.data["HOST_LOGMASS"] <= 10],
         BS21.data.loc[BS21.data["HOST_LOGMASS"] <= 10],
-        "c",
-        "x1_standardized",
+        x_col="c",
+        y_col="x1_standardized",
         filename="color-luminosity-low_mass.png",
         fig_options={
             "data_name": "Low Mass Host",
@@ -681,9 +683,9 @@ if __name__ == "__main__":
     )
     plot_binned(
         data.data,
-        BS21.data,
-        "c",
-        "HOST_LOGMASS",
+        # BS21.data,
+        x_col="c",
+        y_col="HOST_LOGMASS",
         filename="mass-color.png",
         fig_options={
             "sim_name": "BS21",
@@ -712,13 +714,14 @@ if __name__ == "__main__":
             "sim_name": "BS21",
             "y_label": r"M$'$ (mag)",
             "y_flip": True,
+            "ylim": [-13, -25],
         },
     )
     plot_binned(
         data.data,
         G10.data,
-        "c",
-        "x1_standardized",
+        x_col="c",
+        y_col="x1_standardized",
         filename="color-luminosity-G10.png",
         fig_options={
             "sim_name": "G10",
@@ -729,8 +732,8 @@ if __name__ == "__main__":
     plot_binned(
         data.data,
         C11.data,
-        "c",
-        "x1_standardized",
+        x_col="c",
+        y_col="x1_standardized",
         filename="color-luminosity-C11.png",
         fig_options={
             "sim_name": "C11",
