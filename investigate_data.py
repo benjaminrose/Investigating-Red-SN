@@ -31,10 +31,13 @@ class Fitres:
         # So not: data, labels, colors, ...
         self.histplot_keywords = {
             "bins": "auto",
-            "cumulative": True,
             "element": "step",
             "fill": False,
             "stat": "density",
+        }
+        self.cumulative_plot_keywords = {
+            **self.histplot_keywords,
+            "cumulative": True,
         }
         self.M0 = -19.34
         self.alpha = alpha
