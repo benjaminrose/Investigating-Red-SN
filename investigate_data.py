@@ -86,17 +86,89 @@ class Fitres:
         )
         return self.data
 
-    def clean_data(self, x1err_max=2.0, x1_max=5, cerr_max=1, c_min=-0.5):
+    def clean_data(
+        self, x1err_max=1.5, x1_max=3.0, cerr_max=0.15, c_min=-0.3, sim=False
+    ):
+        """Defulats follow Pantheon+.
+
+        - x1min=-3.0
+        - x1max=+3.0
+        - ~~cmax=+0.3~~
+        - cmin=-0.3
+        - CUTWIN cERR 0 .15
+        - CUTWIN x1ERR 0 1.5
+        - CUTWIN PKMJDERR 0 20
+        - CUTWIN MWEBV 0 .3
+        - cutwin_Trestmin: -9999.0 5.0
+        """
+        # Apply Pantheon+ cleaning
         self._cut_x1err(x1err_max)
         self._cut_x1(x1_max)
         self._cut_cerr(cerr_max)
         self._cut_c(c_min)
+        self._cut_PKMJDERR(20)  # checking once, no SN effected
+        self._cut_MWEBV(0.3)  # checking once, ~25% of SN effected
+        if not sim:
+            self._cut_Trestmin(5.0)  # checking once, no SN effected
+
+        # Also fix mass issues
+        self._clean_mass()
         return self
+
+    def _clean_mass(self):
+        """
+        These objects have crazy low masses.
+        CID
+        1290127    2.000
+        1266657    2.000
+
+        There is one other < 10^7 stellar mass value, but 10^7.0 seems
+        to be the "not detected" value.
+
+        Shift all masses that are < 10^6 to 10^7.
+        """
+        TOO_LOW_MASS = 6.0
+        MASS_NOT_DETECTED_VALUE = 7.0
+
+        if self.VERBOSE:
+            print(
+                f'SN with low stellar mass, pre-cleaning:\n{self.data.loc[self.data["HOST_LOGMASS"] < 7.0, "HOST_LOGMASS"]}'
+            )
+
+        self.data.loc[
+            self.data["HOST_LOGMASS"] < TOO_LOW_MASS, "HOST_LOGMASS"
+        ] = MASS_NOT_DETECTED_VALUE
+
+        if self.VERBOSE:
+            print(
+                f'SN with low stellar mass, post-cleaning:\n{self.data.loc[self.data["HOST_LOGMASS"] < 7.0, "HOST_LOGMASS"]}'
+            )
+
+    def _cut_PKMJDERR(self, PKMJDERR):
+        if self.VERBOSE:
+            print("pre cut", self.data["PKMJDERR"].describe())
+        self.data = self.data[self.data["PKMJDERR"] <= PKMJDERR]
+        if self.VERBOSE:
+            print("post cut", self.data["PKMJDERR"].describe())
+
+    def _cut_MWEBV(self, MWEBV):
+        if self.VERBOSE:
+            print("pre cut", self.data["MWEBV"].describe())
+        self.data = self.data[self.data["MWEBV"] <= MWEBV]
+        if self.VERBOSE:
+            print("post cut", self.data["MWEBV"].describe())
+
+    def _cut_Trestmin(self, TrestMIN):
+        if self.VERBOSE:
+            print("pre cut", self.data["TrestMIN"].describe())
+        self.data = self.data[self.data["TrestMIN"] <= TrestMIN]
+        if self.VERBOSE:
+            print("post cut", self.data["TrestMIN"].describe())
 
     def _cut_c(self, c_min):
         if self.VERBOSE:
             print(f"Initial c distribution:\n{self.data[['c', 'cERR']].describe()}\n")
-        self.data = self.data[c_min < self.data["c"]]
+        self.data = self.data[c_min <= self.data["c"]]
         if self.VERBOSE:
             print(
                 f"After-cuts c distribution:\n{self.data[['c', 'cERR']].describe()}\n"
@@ -551,9 +623,9 @@ if __name__ == "__main__":
         2000  # defaults to 5000, 2000 is good for our our data set, 500 for fast
     )
     c_splits = [0.3]  # was [0.1, 0.3] during initial analysis
-    x1err_max = 1.0
+    x1err_max = 1.5
     x1_max = 3  # x1 cut is on abs(x1)
-    cerr_max = 0.2
+    cerr_max = 0.15
     c_min = -0.3
     C_MAX_FIT = cli.cmax
     # fitprob_min = 0.1
@@ -641,15 +713,15 @@ if __name__ == "__main__":
     # Work with sim data
     ####
     BS21 = Fitres(Path("data/COMBINED_SIMS.FITRES"), alpha)
-    BS21.clean_data(x1err_max, x1_max, cerr_max, c_min)
+    BS21.clean_data(x1err_max, x1_max, cerr_max, c_min, sim=True)
     BS21.calc_HR()
 
     G10 = Fitres(Path("data/G10_SIMDATA.FITRES"), alpha)
-    G10.clean_data(x1err_max, x1_max, cerr_max, c_min)
+    G10.clean_data(x1err_max, x1_max, cerr_max, c_min, sim=True)
     G10.calc_HR()
 
     C11 = Fitres(Path("data/C11_SIMDATA.FITRES"), alpha)
-    C11.clean_data(x1err_max, x1_max, cerr_max, c_min)
+    C11.clean_data(x1err_max, x1_max, cerr_max, c_min, sim=True)
     C11.calc_HR()
 
     # Plots
