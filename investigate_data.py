@@ -20,7 +20,7 @@ from br_util.stats import robust_scatter
 from br_util.snana import read_data
 from br_util.plot import save_plot, new_figure
 
-sns.set(context="talk", style="ticks", font="serif", color_codes=True)
+sns.set_theme(context="talk", style="ticks", font="serif", color_codes=True)
 
 
 class Fitres:
@@ -410,15 +410,16 @@ def plot_binned(
                 sim_x,
                 sim_y,
                 ".",
+                color="tab:green",
                 markersize=3,
-                alpha=0.3,
+                alpha=0.1,
                 label=fig_options.get("sim_name", "Simulation"),
             )
         ax.plot(
             data_x,
             data_y,
             ".",
-            color="tab:orange",
+            color="tab:blue",
             markersize=3,
             alpha=0.3,
             label=fig_options.get("data_name", "Pantheon+"),
@@ -428,6 +429,7 @@ def plot_binned(
             (sim_edges[:-1] + sim_edges[1:]) / 2,
             sim_stat,
             yerr=sim_error,
+            color="tab:pink",
             fmt="^",
             label="Binned simulation",
         )
@@ -435,7 +437,7 @@ def plot_binned(
         (data_edges[:-1] + data_edges[1:]) / 2,
         data_stat,
         yerr=data_error,
-        color="r",
+        color="tab:orange",
         fmt=">",
         label="Binned data",
     )
@@ -486,7 +488,11 @@ def plot_binned(
     ax.set_xlabel(fig_options.get("x_label", x_col))
     ax.set_ylabel(fig_options.get("y_label", y_col))
     ax.set_ylim(fig_options.get("ylim", ax.get_ylim()))
-    ax.legend(fontsize="x-small", loc=fig_options.get("leg_loc", "best"))
+
+    leg = ax.legend(fontsize="x-small", loc=fig_options.get("leg_loc", "best"))
+    for line in leg.get_lines():
+        line._legmarker.set_alpha(1)
+        line._legmarker.set_markersize(6)
 
     save_plot(filename)
 
