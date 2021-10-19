@@ -203,62 +203,7 @@ class Fitres:
             )
         return self.data
 
-    def plot_beta_ben(self, save=True):
-        fig, ax = new_figure()
-
-        # y = data["mB"] - data["mu_theory"] - alpha * data["x1"]
-        x_main = np.linspace(self.data["c"].min(), self.data["c"].max(), 50)
-        x_alt1 = np.linspace(0.15, 0.8, 50)
-        x_alt2 = np.linspace(0.8, self.data["c"].max(), 20)
-        beta1 = 3.5
-        M0_1 = 0.25
-        beta2 = 1.0
-        M0_2 = 2.0
-
-        ax.plot(self.data["c"], self.data["x1_standardized"], ".", alpha=0.7)
-        ax.plot(
-            x_main,
-            self.beta * x_main + self.M0,
-            label=r"$\beta$" + f"={self.beta}, M0={self.M0}",
-        )
-        ax.plot(
-            x_alt1,
-            beta1 * x_alt1 + self.M0 + M0_1,
-            label=r"$\beta$" + f"={beta1}, M0={self.M0+M0_1}",
-        )
-        ax.plot(
-            x_alt2,
-            beta2 * x_alt2 + self.M0 + M0_2,
-            label=r"$\beta$" + f"={beta2}, M0={self.M0+M0_2}",
-        )
-
-        ax.set(
-            xlabel="Apparent Color c",
-            ylabel=f"$ m_B - \mu(z) + ${self.alpha} $x_1$ (mag)",
-        )
-        ax.invert_yaxis()
-        ax.legend(fontsize="smaller")
-
-        save_plot("color-luminosity-naive.pdf")
-
-    def plot_fitprob_c(self, fitprob_cut=0.01):
-        _, ax = new_figure()
-
-        fail = self.data["FITPROB"] < fitprob_cut
-        ax.plot(self.data["c"], self.data["FITPROB"], ".", label="Passes")
-        ax.plot(
-            self.data.loc[fail, "c"], self.data.loc[fail, "FITPROB"], ".", label="Fails"
-        )
-
-        ax.set_xlabel("SALT2 c")
-        ax.set_ylabel("SNANA Fit Probability")
-        ax.legend()
-        save_plot("color-fitprob.pdf")
-
     def plot_fitprob_binned_c(self, fitprob_cut=0.01):
-        # data, x, y, c_min=-0.5, bins=25, error_stat=robust_scatter
-        # data_x, data_y, data_stat, data_edges, data_error = bin_dataset(self.data, "c",
-
         data, x, y, bins = self.data, "c", "FITPROB", 25  ## passed to bin_dataset
         data_mask = data[x] > -0.5
         data_x_axis = data.loc[data_mask, x]
@@ -270,9 +215,6 @@ class Fitres:
         data_stat, data_edges, _ = binned_statistic(
             data_x_axis, data_y_axis, statistic=statistic, bins=bins
         )
-        # data_error, _, _ = binned_statistic(
-        #     data_x_axis, data_y_axis, statistic=error_stat, bins=bins
-        # )
 
         _, ax = new_figure()
 
@@ -301,18 +243,6 @@ class Fitres:
         )
         if key == "c":
             ax.set_yscale("log")
-        save_plot(filename)
-
-    def plot_hist_c_special(self, key, filename=""):
-        new_figure()
-        ax = sns.histplot(
-            data=np.log(self.data[key] - self.data[key].min() - 0.0001),
-            # x=key,
-            color="b",
-            cumulative=False,
-            # **self.histplot_keywords,
-        )
-        ax.set_xlabel(f"log(c +{self.data[key].min() +0.0001:+.3f})")
         save_plot(filename)
 
     def plot_hists(self, key="FITPROB", filename=""):

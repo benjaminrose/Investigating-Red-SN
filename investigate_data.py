@@ -8,9 +8,9 @@ from pathlib import Path
 import numpy as np
 
 from fitres import Fitres
-from figures import *
+from figures import plot_binned
 from model_fitting import rv_full_range, rv_least_squares
-from util import parse_cli, __version__
+from util import parse_cli
 
 
 if __name__ == "__main__":
@@ -103,17 +103,14 @@ if __name__ == "__main__":
         print("## Sub-sample Demographics\n")
         print(f"Splitting at c={c_split}")
         data.slipt_on_c(c_split)
-        # data.plot_hists("FITPROB", f"fitprob_dist_{c_split}.pdf")  # Not in paper
         data.plot_hists("x1", f"x1_dist_{c_split}.pdf")
         data.plot_hists("HOST_LOGMASS", f"mass_dist_{c_split}.pdf")
         data.plot_hists("zHD", f"redshift_dist_{c_split}.pdf")
         print("")
 
-    # data.plot_fitprob_c()   # Not in paper
     data.plot_fitprob_binned_c()
 
     data.plot_hist("c", f"c_dist.pdf")
-    # data.plot_hist_c_special("c", f"c_dist_special.pdf")   # Not in paper
 
     print("## Data vs Sims\n")
     plot_binned(
@@ -158,15 +155,6 @@ if __name__ == "__main__":
             "ylim": [6.5, 13.5],
         },
     )
-    # # TODO: currently cutting x-axis of anything <-0.5. This is crazy for host_logmass
-    # plot_binned(
-    #     data.data,
-    #     BS21.data,
-    #     "HOST_LOGMASS",
-    #     "c",
-    #     show_data=False,
-    #     filename="color-mass.png",   # Not in paper
-    # )
 
     plot_binned(
         data.data,
