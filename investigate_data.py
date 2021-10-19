@@ -6,45 +6,11 @@ Requires python 3.9
 from pathlib import Path
 
 import numpy as np
-from numpy.polynomial import Polynomial
-
-import linmix
-
-from br_util.stats import robust_scatter
-
 
 from fitres import Fitres
 from figures import *
-
+from model_fitting import rv_full_range, rv_least_squares
 from util import parse_cli, __version__
-
-
-def broken_beta(c, m_cosmo, m_red, M_0, c_break=0.3):
-    """define a broken linear color-luminosity relationship
-
-    Parameters
-    ----------
-    c : np.array
-        Color (x-)values
-    m_cosmo : float
-        slope for c <= c_break.
-    m_red : float
-        slope for c_break < c.
-    M_0 : float
-        The intercept (c=0) value
-    c_break : float
-        Break point in the broken linear function. Defaults to 0.3.
-
-    Return
-    ------
-    mag : np.array
-        Standardized (before color corretions) absolute magnitude (y-)values.
-    """
-    return np.piecewise(
-        c,
-        [c <= c_break, c > c_break],
-        [lambda x: m_cosmo * x + M_0, lambda x: m_red * x + M_0],
-    )
 
 
 if __name__ == "__main__":
@@ -56,8 +22,6 @@ if __name__ == "__main__":
     VERBOSE = cli.verbose
 
     RUN_LINMIX = cli.linmix
-    # defaults to 5000, 2000 is good for our our data set, 500 for fast
-    LINMIX_MIN_ITR = 200
     C_MAX_FIT = 2.0  # cli.cmax # this is currently defined in several locations.
 
     c_splits = [0.3]  # was [0.1, 0.3] during initial analysis
@@ -107,73 +71,17 @@ if __name__ == "__main__":
     print("\n## Basic Fit of Color-Luminosity Relationship")
     fit_mask = data.data["c"] <= C_MAX_FIT
     if RUN_LINMIX:
-        lm = linmix.LinMix(
-            x=data.data.loc[fit_mask, "c"],
-            y=data.data.loc[fit_mask, "x1_standardized"],
-            xsig=data.data.loc[fit_mask, "cERR"],
-            ysig=data.data.loc[fit_mask, "x1_standardized_ERR"],
-        )
-        lm.run_mcmc(miniter=LINMIX_MIN_ITR)
-        print(
-            f"\n* with LINMIX: Beta = {np.median(lm.chain['beta']):.3f} +/- {robust_scatter(lm.chain['beta']):.3f}"
-        )
-        fit = lm.chain
-
-        # fit_mask_cosmo = (-0.3 <= data.data["c"]) & (data.data["c"] <= 0.3)
-        # lm_cosmo = linmix.LinMix(
-        #     x=data.data.loc[fit_mask_cosmo, "c"],
-        #     y=data.data.loc[fit_mask_cosmo, "x1_standardized"],
-        #     xsig=data.data.loc[fit_mask_cosmo, "cERR"],
-        #     ysig=data.data.loc[fit_mask_cosmo, "x1_standardized_ERR"],
-        # )
-        # lm_cosmo.run_mcmc(miniter=LINMIX_MIN_ITR)
-        # print(
-        #     f"\n* with LINMIX: Beta_cosmo = {np.median(lm_cosmo.chain['beta']):.3f} +/- {robust_scatter(lm_cosmo.chain['beta']):.3f}"
-        # )
-
-        # fit_mask_red = 0.3 < data.data["c"]
-        # lm_red = linmix.LinMix(
-        #     x=data.data.loc[fit_mask_red, "c"],
-        #     y=data.data.loc[fit_mask_red, "x1_standardized"],
-        #     xsig=data.data.loc[fit_mask_red, "cERR"],
-        #     ysig=data.data.loc[fit_mask_red, "x1_standardized_ERR"],
-        # )
-        # lm_red.run_mcmc(miniter=LINMIX_MIN_ITR)
-        # print(
-        #     f"\n* with LINMIX: Beta_red = {np.median(lm_red.chain['beta']):.3f} +/- {robust_scatter(lm_red.chain['beta']):.3f}"
-        # )
+        fit = rv_full_range(data, fit_mask)
     else:
-        lm = None
+        # lm = None
         fit = None
 
-    # if cERR << x1_standardized_ERR
-    # use .convert cause numpy's default is dumb.
-    # https://numpy.org/doc/stable/reference/routines.polynomials.html#transition-guide
-    linear_fit, lin_error = Polynomial.fit(
-        x=data.data.loc[fit_mask, "c"],
-        y=data.data.loc[fit_mask, "x1_standardized"],
-        w=data.data.loc[fit_mask, "x1_standardized_ERR"],
-        full=True,
-        deg=1,
-    )
-    quadratic_fit, quad_error = Polynomial.fit(
-        x=data.data.loc[fit_mask, "c"],
-        y=data.data.loc[fit_mask, "x1_standardized"],
-        w=data.data.loc[fit_mask, "x1_standardized_ERR"],
-        full=True,
-        deg=2,
-    )
-    cubic_fit, cubic_error = Polynomial.fit(
-        x=data.data.loc[fit_mask, "c"],
-        y=data.data.loc[fit_mask, "x1_standardized"],
-        w=data.data.loc[fit_mask, "x1_standardized_ERR"],
-        full=True,
-        deg=3,
-    )
+    linear_fit = rv_least_squares(data, fit_mask)
     print("* with least-squares:")
-    print("   *", linear_fit.convert())
-    print("   *", quadratic_fit.convert())
-    print("   *", cubic_fit.convert(), "\n")
+    print("   *", linear_fit)
+    # print("   *", quadratic_fit.convert())
+    # print("   *", cubic_fit.convert())
+    print("")
 
     # Work with sim data
     ####
