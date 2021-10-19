@@ -20,6 +20,8 @@ from br_util.stats import robust_scatter
 from br_util.snana import read_data
 from br_util.plot import save_plot, new_figure
 
+from KS2D.KS2D import ks2d2s
+
 sns.set_theme(context="talk", style="ticks", font="serif", color_codes=True)
 
 
@@ -34,7 +36,7 @@ class Fitres:
             "bins": "auto",
             "element": "step",
             "fill": False,
-            "stat": "density",
+            "stat": "probability",
         }
         self.cumulative_plot_keywords = {
             **self.histplot_keywords,
@@ -410,6 +412,7 @@ def bin_dataset(data, x, y, bins=25, error_stat=robust_scatter):
         Passed to scipy.stats.binned_statistic. Defaults to
         `br_util.stats.robust_scatter`.
     """
+    SCATTER_FLOOR = 0.1
     data_x_axis = data[x]
     data_y_axis = data[y]
 
@@ -419,6 +422,7 @@ def bin_dataset(data, x, y, bins=25, error_stat=robust_scatter):
     data_error, _, _ = binned_statistic(
         data_x_axis, data_y_axis, statistic=error_stat, bins=bins
     )
+    data_error[data_error == 0] = SCATTER_FLOOR
     return data_x_axis, data_y_axis, data_stat, data_edges, data_error
 
 
@@ -545,16 +549,32 @@ def plot_binned(
         )
         ax.plot(
             xs,
-            linear_fit.convert().coef[0] + xs * linear_fit.convert().coef[1],
-            label="Linear Least-Squares",
+            np.median(lm_cosmo.chain["alpha"]) + xs * np.median(lm_cosmo.chain["beta"]),
+            label=r"$\beta_{cosmo}=$"
+            + f"{np.median(lm_cosmo.chain['beta']):.2f}"
+            + r" $\pm$ "
+            + f"{robust_scatter(lm_cosmo.chain['beta']):.2f}",
         )
         ax.plot(
             xs,
-            quadratic_fit.convert().coef[0]
-            + xs * quadratic_fit.convert().coef[1]
-            + xs ** 2 * quadratic_fit.convert().coef[2],
-            label="Quadratic Least-Squares",
+            np.median(lm_red.chain["alpha"]) + xs * np.median(lm_red.chain["beta"]),
+            label=r"$\beta_{red}=$"
+            + f"{np.median(lm_red.chain['beta']):.2f}"
+            + r" $\pm$ "
+            + f"{robust_scatter(lm_red.chain['beta']):.2f}",
         )
+        # ax.plot(
+        #     xs,
+        #     linear_fit.convert().coef[0] + xs * linear_fit.convert().coef[1],
+        #     label="Linear Least-Squares",
+        # )
+        # ax.plot(
+        #     xs,
+        #     quadratic_fit.convert().coef[0]
+        #     + xs * quadratic_fit.convert().coef[1]
+        #     + xs ** 2 * quadratic_fit.convert().coef[2],
+        #     label="Quadratic Least-Squares",
+        # )
 
     if fig_options.get("y_flip", False):
         ax.invert_yaxis()
@@ -562,7 +582,13 @@ def plot_binned(
     ax.set_ylabel(fig_options.get("y_label", y_col))
     ax.set_ylim(fig_options.get("ylim", ax.get_ylim()))
 
-    leg = ax.legend(fontsize="x-small", loc=fig_options.get("leg_loc", "best"))
+    if fit is not None:
+        ncol = 2
+    else:
+        ncol = 1
+    leg = ax.legend(
+        fontsize="xx-small", loc=fig_options.get("leg_loc", "best"), ncol=ncol
+    )
     for line in leg.get_lines():
         line._legmarker.set_alpha(1)
         line._legmarker.set_markersize(6)
@@ -570,8 +596,23 @@ def plot_binned(
     save_plot(filename)
 
     if sim is not None:
-        ks, p = ks_2samp(data_stat, sim_stat)
-        print(f"For {filename},\nKS-test of binned stats: {ks}, p={p:.5f}")
+        # ks, p = ks_2samp(data_stat, sim_stat)
+        print("Running KS2D ...")
+        if USE_KS2D:
+            data_step = 1
+            sim_step = 1
+        else:
+            data_step = 20
+            sim_step = 4950 if fig_options.get("sim_name") == "BS21" else 370
+        _, ks_p = ks2d2s(
+            np.stack((data_x[::data_step], data_y[::data_step]), axis=1),
+            np.stack((sim_x[::sim_step], sim_y[::sim_step]), axis=1),
+        )
+
+        print(f"For {filename},")
+        print(
+            f"KS-test of binned stats: {ks_p:.3g}. With N=({len(data_x[::data_step])}, {len(sim_y[::sim_step])})."
+        )
         chi_square = np.nansum(
             (data_stat - sim_stat) ** 2 / (sim_error ** 2 + data_error ** 2)
         )
@@ -580,7 +621,34 @@ def plot_binned(
         # Then somehow compute a single value from the 25 Mann-Whitney-U values.
 
 
-if __name__ == "__main__":
+def broken_beta(c, m_cosmo, m_red, M_0, c_break=0.3):
+    """define a broken linear color-luminosity relationship
+
+    Parameters
+    ----------
+    c : np.array
+        Color (x-)values
+    m_cosmo : float
+        slope for c <= c_break.
+    m_red : float
+        slope for c_break < c.
+    M_0 : float
+        The intercept (c=0) value
+    c_break : float
+        Break point in the broken linear function. Defaults to 0.3.
+
+    Return
+    ------
+    mag : np.array
+        Standardized (before color corretions) absolute magnitude (y-)values.
+    """
+    return np.piecewise(
+        c,
+        [c <= c_break, c > c_break],
+        [lambda x: m_cosmo * x + M_0, lambda x: m_red * x + M_0],
+    )
+
+
 def parse_cli():
     arg_parser = ArgumentParser(description=__doc__)
     arg_parser.add_argument("--version", action="version", version=__version__)
@@ -686,13 +754,35 @@ if __name__ == "__main__":
             xsig=data.data.loc[fit_mask, "cERR"],
             ysig=data.data.loc[fit_mask, "x1_standardized_ERR"],
         )
-        lm.run_mcmc(
-            miniter=LINMIX_MIN_ITR
-        )  # can do  silent=(not VERBOSE) once up and running.
+        lm.run_mcmc(miniter=LINMIX_MIN_ITR)
         print(
             f"\n* with LINMIX: Beta = {np.median(lm.chain['beta']):.3f} +/- {robust_scatter(lm.chain['beta']):.3f}"
         )
         fit = lm.chain
+
+        fit_mask_cosmo = (-0.3 <= data.data["c"]) & (data.data["c"] <= 0.3)
+        lm_cosmo = linmix.LinMix(
+            x=data.data.loc[fit_mask_cosmo, "c"],
+            y=data.data.loc[fit_mask_cosmo, "x1_standardized"],
+            xsig=data.data.loc[fit_mask_cosmo, "cERR"],
+            ysig=data.data.loc[fit_mask_cosmo, "x1_standardized_ERR"],
+        )
+        lm_cosmo.run_mcmc(miniter=LINMIX_MIN_ITR)
+        print(
+            f"\n* with LINMIX: Beta_cosmo = {np.median(lm_cosmo.chain['beta']):.3f} +/- {robust_scatter(lm_cosmo.chain['beta']):.3f}"
+        )
+
+        fit_mask_red = 0.3 < data.data["c"]
+        lm_red = linmix.LinMix(
+            x=data.data.loc[fit_mask_red, "c"],
+            y=data.data.loc[fit_mask_red, "x1_standardized"],
+            xsig=data.data.loc[fit_mask_red, "cERR"],
+            ysig=data.data.loc[fit_mask_red, "x1_standardized_ERR"],
+        )
+        lm_red.run_mcmc(miniter=LINMIX_MIN_ITR)
+        print(
+            f"\n* with LINMIX: Beta_red = {np.median(lm_red.chain['beta']):.3f} +/- {robust_scatter(lm_red.chain['beta']):.3f}"
+        )
     else:
         lm = None
         fit = None
@@ -822,7 +912,7 @@ if __name__ == "__main__":
             "sim_name": "BS21",
             "y_label": r"M$'$ (mag)",
             "y_flip": True,
-            "ylim": [-13, -25],
+            "ylim": [-14.5, -23],  # [-14.5, -21.5] elsewhere
         },
     )
     plot_binned(
@@ -835,6 +925,7 @@ if __name__ == "__main__":
             "sim_name": "G10",
             "y_label": r"M$'$ (mag)",
             "y_flip": True,
+            "ylim": [-14.5, -21.5],
         },
     )
     plot_binned(
@@ -847,5 +938,6 @@ if __name__ == "__main__":
             "sim_name": "C11",
             "y_label": r"M$'$ (mag)",
             "y_flip": True,
+            "ylim": [-14.5, -21.5],
         },
     )
