@@ -1,0 +1,3 @@
+[submodule "KS2D"]
+	path = KS2D
+	url = https://github.com/Gabinou/2DKS.git
