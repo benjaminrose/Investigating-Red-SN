@@ -518,7 +518,8 @@ def plot_binned(
         # relevantly bring in global constant (from CLI) into local scope.
         if C_MAX_FIT > data_x.max():
             print(
-                f"{C_MAX_FIT = } is above {data_x.max() = }. Plot of linear fit will not go past the data."
+                f"{C_MAX_FIT = } is above {data_x.max() = }. Plot of linear fit will not go past the data.",
+                end="\n\n",
             )
             c_max_fit = data_x.max()
         else:
@@ -580,6 +581,7 @@ def plot_binned(
 
 
 if __name__ == "__main__":
+def parse_cli():
     arg_parser = ArgumentParser(description=__doc__)
     arg_parser.add_argument("--version", action="version", version=__version__)
     arg_parser.add_argument(
@@ -613,42 +615,55 @@ if __name__ == "__main__":
         help="turn on verbose output (default: %(default)s)",
     )
 
-    cli = arg_parser.parse_args()
+    return arg_parser.parse_args()
 
-    # Inputs
+
+if __name__ == "__main__":
+    cli = parse_cli()
+
+    # GLOBAL DEFAULTS
+    #################
     data_file = Path("data") / Path("INPUT_FITOPT000.FITRES")
     VERBOSE = cli.verbose
+
     RUN_LINMIX = cli.linmix
-    LINMIX_MIN_ITR = (
-        2000  # defaults to 5000, 2000 is good for our our data set, 500 for fast
-    )
+    # defaults to 5000, 2000 is good for our our data set, 500 for fast
+    LINMIX_MIN_ITR = 200
+    C_MAX_FIT = cli.cmax
+    USE_KS2D = False
+
     c_splits = [0.3]  # was [0.1, 0.3] during initial analysis
+
     x1err_max = 1.5
     x1_max = 3  # x1 cut is on abs(x1)
     cerr_max = 0.15
     c_min = -0.3
-    C_MAX_FIT = cli.cmax
     # fitprob_min = 0.1
+
     alpha = cli.alpha
     COSMO = wCDM(H0=70, Om0=0.3, Ode0=0.7, w0=-1)
 
     # Import and clean data
-    ####
+    #########################
+    print("")  # provides spacing in outputs
+    print("# Investigating Highly Reddened SN\n")
+
     data = Fitres(data_file, alpha, VERBOSE)
     data.clean_data(x1err_max, x1_max, cerr_max, c_min)
     data.calc_HR()
-    data.calc_RV()
 
+    print("## Demographics of Sample\n")
+    print("### Number of Highly Reddened SN\n")
     print(f"There are {data.data.loc[data.data['c']>0.3, 'c'].shape[0]} SN with c>0.3")
     print(
         f"There are {data.data.loc[np.logical_and(data.data['c']>0.3, data.data['c']<=1.0), 'c'].shape[0]} SN with 0.3 < c <= 1.0"
     )
     print(
-        f"There are {data.data.loc[data.data['c']>1.0, 'c'].shape[0]} SN with c > 1.0"
+        f"There are {data.data.loc[data.data['c']>1.0, 'c'].shape[0]} SN with c > 1.0 \n"
     )
 
     data.slipt_on_c(0.99)
-    print("SN affected by c=1 boundry.")
+    print("### SN affected by c=1 boundry.")
     print(
         data.red_subsample[
             [
@@ -658,11 +673,11 @@ if __name__ == "__main__":
                 "cERR",
                 "x1_standardized",
                 "x1_standardized_ERR",
-                "RV",
             ]
         ]
     )
 
+    print("\n## Basic Fit of Color-Luminosity Relationship")
     fit_mask = data.data["c"] <= C_MAX_FIT
     if RUN_LINMIX:
         lm = linmix.LinMix(
@@ -675,7 +690,7 @@ if __name__ == "__main__":
             miniter=LINMIX_MIN_ITR
         )  # can do  silent=(not VERBOSE) once up and running.
         print(
-            f"Beta = {np.median(lm.chain['beta']):.3f} +/- {robust_scatter(lm.chain['beta']):.3f}\n"
+            f"\n* with LINMIX: Beta = {np.median(lm.chain['beta']):.3f} +/- {robust_scatter(lm.chain['beta']):.3f}"
         )
         fit = lm.chain
     else:
@@ -706,9 +721,10 @@ if __name__ == "__main__":
         full=True,
         deg=3,
     )
-    print(linear_fit.convert(), lin_error)
-    print(quadratic_fit.convert(), quad_error)
-    print(cubic_fit.convert(), cubic_error)
+    print("* with least-squares:")
+    print("   *", linear_fit.convert())
+    print("   *", quadratic_fit.convert())
+    print("   *", cubic_fit.convert(), "\n")
 
     # Work with sim data
     ####
@@ -727,10 +743,14 @@ if __name__ == "__main__":
     # Plots
     ###
     for c_split in c_splits:
+        print("## Sub-sample Demographics\n")
+        print(f"Splitting at c={c_split}")
         data.slipt_on_c(c_split)
         # data.plot_hists("FITPROB", f"fitprob_dist_{c_split}.pdf")  # Not in paper
         data.plot_hists("x1", f"x1_dist_{c_split}.pdf")
         data.plot_hists("HOST_LOGMASS", f"mass_dist_{c_split}.pdf")
+        data.plot_hists("zHD", f"redshift_dist_{c_split}.pdf")
+        print("")
 
     # data.plot_fitprob_c()   # Not in paper
     data.plot_fitprob_binned_c()
@@ -738,6 +758,7 @@ if __name__ == "__main__":
     data.plot_hist("c", f"c_dist.pdf")
     # data.plot_hist_c_special("c", f"c_dist_special.pdf")   # Not in paper
 
+    print("## Data vs Sims\n")
     plot_binned(
         data.data.loc[data.data["HOST_LOGMASS"] > 10],
         BS21.data.loc[BS21.data["HOST_LOGMASS"] > 10],
