@@ -7,8 +7,10 @@ from br_util.snana import read_data
 
 # import matplotlib.pyplot as plt
 import seaborn as sns
-from scipy.stats import binned_statistic, ks_2samp
+from scipy.stats import binned_statistic
 from br_util.plot import save_plot, new_figure
+
+from hypothesis_testing import ks1d
 
 sns.set_theme(context="talk", style="ticks", font="serif", color_codes=True)
 
@@ -341,7 +343,7 @@ class Fitres:
         ax.legend()
 
         print(
-            f"KS test (two-sided) p-value for {filename}: {ks_2samp(sub_set1[key], sub_set2[key])[1]}."
+            f"KS test (two-sided) p-value for {filename}: {ks1d(sub_set1[key], sub_set2[key])}."
         )
 
         save_plot(filename)

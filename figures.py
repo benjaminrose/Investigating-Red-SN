@@ -6,8 +6,8 @@ import numpy as np
 from br_util.plot import save_plot, new_figure
 from br_util.stats import robust_scatter
 
-from KS2D.KS2D import ks2d2s
 from util import bin_dataset
+from hypothesis_testing import ks2d
 
 __all__ = ["plot_binned"]
 
@@ -222,17 +222,8 @@ def _data_v_sim(
     filename,
     fig_options,
 ):
-    # ks, p = ks_2samp(data_stat, sim_stat)
-    print("Running KS2D ...")
-    if USE_KS2D:
-        data_step = 1
-        sim_step = 1
-    else:
-        data_step = 20
-        sim_step = 4950 if fig_options.get("sim_name") == "BS21" else 370
-    _, ks_p = ks2d2s(
-        np.stack((data_x[::data_step], data_y[::data_step]), axis=1),
-        np.stack((sim_x[::sim_step], sim_y[::sim_step]), axis=1),
+    ks_p, data_step, sim_step = ks2d(
+        data_x, data_y, sim_x, sim_y, fig_options, USE_KS2D
     )
 
     print(f"For {filename},")
