@@ -48,12 +48,12 @@ def parse_cli():
         default=25,
         help="number of bins to use in color-luminosity plot (default: %(default)s)",
     )
-    arg_parser.add_argument(
-        "--cmax",
-        type=float,
-        default=2.0,
-        help="maximum c used in fitting BETA (default: %(default)s)",
-    )
+    # arg_parser.add_argument(
+    #     "--cmax",
+    #     type=float,
+    #     default=2.0,
+    #     help="maximum c used in fitting BETA (default: %(default)s)",
+    # )
     arg_parser.add_argument(
         "--linmix",
         action=BooleanOptionalAction,

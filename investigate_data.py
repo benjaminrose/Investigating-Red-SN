@@ -7,216 +7,16 @@ from pathlib import Path
 
 import numpy as np
 from numpy.polynomial import Polynomial
-import seaborn as sns
 
 import linmix
 
 from br_util.stats import robust_scatter
-from br_util.plot import save_plot, new_figure
 
-from KS2D.KS2D import ks2d2s
 
 from fitres import Fitres
 from figures import *
 
-from util import parse_cli, bin_dataset, __version__
-
-sns.set_theme(context="talk", style="ticks", font="serif", color_codes=True)
-
-
-def plot_binned(
-    data,
-    sim=None,
-    x_col="c",
-    y_col="HOST_LOGMASS",
-    fit=None,
-    show_data=True,
-    split_mass=False,
-    filename="",
-    fig_options={},
-):
-    """plot binned values of data.
-
-    Parameters
-    ----------
-    data : pandas.DataFrame
-    sim=None : pandas.DataFrame
-        If None, then ignored.
-    x_col : str ("c")
-        DataFrame column name to use for x-axis (axis the bins are applied).
-    y_col : str (""HOST_LOGMASS")
-        DataFrame column name to use for y-axis (axis the summary statistic is applied).
-    fit : linmix.LinMix.chain (None)
-        The linear fit. Assumes it is from `linmix`. Does not plot anything value is None.
-    show_data: bool (True)
-        If True, show data
-    split_mass: bool (False)
-        Plot data/sims as high and low host stellar mass seperately.
-    filename: str ("")
-        File name to use when saving figure. If left as the empty string,
-        figure is shown but not saved.
-    fig_options : dict
-        Contrains user overrides to be used in figure creation. Keys are
-        "sim_name", "data_name", "x_label", "y_label", "y_flip", "y_lim", "leg_loc".
-    """
-    bins = 25
-
-    if split_mass:
-        data_high = data.loc[data["HOST_LOGMASS"] > 10]
-        data_low = data.loc[data["HOST_LOGMASS"] <= 10]
-        if sim is not None:
-            sim_high = sim.loc[sim["HOST_LOGMASS"] > 10]
-            sim_low = sim.loc[sim["HOST_LOGMASS"] <= 10]
-
-    data_x, data_y, data_stat, data_edges, data_error = bin_dataset(
-        data, x_col, y_col, bins=bins
-    )
-    if sim is not None:
-        sim_x, sim_y, sim_stat, sim_edges, sim_error = bin_dataset(
-            sim, x_col, y_col, bins=data_edges
-        )
-
-    _, ax = new_figure()
-
-    if show_data:
-        if sim is not None:
-            ax.plot(
-                sim_x,
-                sim_y,
-                ".",
-                color="tab:green",
-                markersize=3,
-                alpha=0.1,
-                label=fig_options.get("sim_name", "Simulation"),
-            )
-        ax.plot(
-            data_x,
-            data_y,
-            ".",
-            color="tab:blue",
-            markersize=3,
-            alpha=0.3,
-            label=fig_options.get("data_name", "Pantheon+"),
-        )
-    if sim is not None:
-        ax.errorbar(
-            (sim_edges[:-1] + sim_edges[1:]) / 2,
-            sim_stat,
-            yerr=sim_error,
-            color="tab:pink",
-            fmt="^",
-            label="Binned simulation",
-        )
-    ax.errorbar(
-        (data_edges[:-1] + data_edges[1:]) / 2,
-        data_stat,
-        yerr=data_error,
-        color="tab:orange",
-        fmt=">",
-        label="Binned data",
-    )
-
-    if fit is not None:
-        # relevantly bring in global constant (from CLI) into local scope.
-        if C_MAX_FIT > data_x.max():
-            print(
-                f"{C_MAX_FIT = } is above {data_x.max() = }. Plot of linear fit will not go past the data.",
-                end="\n\n",
-            )
-            c_max_fit = data_x.max()
-        else:
-            c_max_fit = C_MAX_FIT
-
-        xs = np.arange(data_x.min(), c_max_fit, 0.01)
-
-        # only plot every 25 chains. For 2000 chains, this is 4%
-        downsample_frac = 0.15  # 5--10% may be better for a long chain
-        # // floors it but still keeps it as a float.
-        for i in range(0, len(fit), round((len(fit) / downsample_frac) / len(fit))):
-            ys = fit[i]["alpha"] + xs * fit[i]["beta"]
-            ax.plot(xs, ys, color="0.5", alpha=0.02)
-        ys = np.median(fit["alpha"]) + xs * np.median(fit["beta"])
-        ax.plot(
-            xs,
-            ys,
-            color="k",
-            label=r"$\beta=$"
-            + f"{np.median(fit['beta']):.2f}"
-            + r" $\pm$ "
-            + f"{robust_scatter(fit['beta']):.2f}",
-        )
-        ax.plot(
-            xs,
-            np.median(lm_cosmo.chain["alpha"]) + xs * np.median(lm_cosmo.chain["beta"]),
-            label=r"$\beta_{cosmo}=$"
-            + f"{np.median(lm_cosmo.chain['beta']):.2f}"
-            + r" $\pm$ "
-            + f"{robust_scatter(lm_cosmo.chain['beta']):.2f}",
-        )
-        ax.plot(
-            xs,
-            np.median(lm_red.chain["alpha"]) + xs * np.median(lm_red.chain["beta"]),
-            label=r"$\beta_{red}=$"
-            + f"{np.median(lm_red.chain['beta']):.2f}"
-            + r" $\pm$ "
-            + f"{robust_scatter(lm_red.chain['beta']):.2f}",
-        )
-        # ax.plot(
-        #     xs,
-        #     linear_fit.convert().coef[0] + xs * linear_fit.convert().coef[1],
-        #     label="Linear Least-Squares",
-        # )
-        # ax.plot(
-        #     xs,
-        #     quadratic_fit.convert().coef[0]
-        #     + xs * quadratic_fit.convert().coef[1]
-        #     + xs ** 2 * quadratic_fit.convert().coef[2],
-        #     label="Quadratic Least-Squares",
-        # )
-
-    if fig_options.get("y_flip", False):
-        ax.invert_yaxis()
-    ax.set_xlabel(fig_options.get("x_label", x_col))
-    ax.set_ylabel(fig_options.get("y_label", y_col))
-    ax.set_ylim(fig_options.get("ylim", ax.get_ylim()))
-
-    if fit is not None:
-        ncol = 2
-    else:
-        ncol = 1
-    leg = ax.legend(
-        fontsize="xx-small", loc=fig_options.get("leg_loc", "best"), ncol=ncol
-    )
-    for line in leg.get_lines():
-        line._legmarker.set_alpha(1)
-        line._legmarker.set_markersize(6)
-
-    save_plot(filename)
-
-    if sim is not None:
-        # ks, p = ks_2samp(data_stat, sim_stat)
-        print("Running KS2D ...")
-        if USE_KS2D:
-            data_step = 1
-            sim_step = 1
-        else:
-            data_step = 20
-            sim_step = 4950 if fig_options.get("sim_name") == "BS21" else 370
-        _, ks_p = ks2d2s(
-            np.stack((data_x[::data_step], data_y[::data_step]), axis=1),
-            np.stack((sim_x[::sim_step], sim_y[::sim_step]), axis=1),
-        )
-
-        print(f"For {filename},")
-        print(
-            f"KS-test of binned stats: {ks_p:.3g}. With N=({len(data_x[::data_step])}, {len(sim_y[::sim_step])})."
-        )
-        chi_square = np.nansum(
-            (data_stat - sim_stat) ** 2 / (sim_error ** 2 + data_error ** 2)
-        )
-        print(f"reduced chi-2 binned stats: {chi_square/bins:.3f}\n")
-        # I want the Mann-Whitney-U of the data in each bin.
-        # Then somehow compute a single value from the 25 Mann-Whitney-U values.
+from util import parse_cli, __version__
 
 
 def broken_beta(c, m_cosmo, m_red, M_0, c_break=0.3):
@@ -258,8 +58,7 @@ if __name__ == "__main__":
     RUN_LINMIX = cli.linmix
     # defaults to 5000, 2000 is good for our our data set, 500 for fast
     LINMIX_MIN_ITR = 200
-    C_MAX_FIT = cli.cmax
-    USE_KS2D = False
+    C_MAX_FIT = 2.0  # cli.cmax # this is currently defined in several locations.
 
     c_splits = [0.3]  # was [0.1, 0.3] during initial analysis
 
@@ -320,29 +119,29 @@ if __name__ == "__main__":
         )
         fit = lm.chain
 
-        fit_mask_cosmo = (-0.3 <= data.data["c"]) & (data.data["c"] <= 0.3)
-        lm_cosmo = linmix.LinMix(
-            x=data.data.loc[fit_mask_cosmo, "c"],
-            y=data.data.loc[fit_mask_cosmo, "x1_standardized"],
-            xsig=data.data.loc[fit_mask_cosmo, "cERR"],
-            ysig=data.data.loc[fit_mask_cosmo, "x1_standardized_ERR"],
-        )
-        lm_cosmo.run_mcmc(miniter=LINMIX_MIN_ITR)
-        print(
-            f"\n* with LINMIX: Beta_cosmo = {np.median(lm_cosmo.chain['beta']):.3f} +/- {robust_scatter(lm_cosmo.chain['beta']):.3f}"
-        )
+        # fit_mask_cosmo = (-0.3 <= data.data["c"]) & (data.data["c"] <= 0.3)
+        # lm_cosmo = linmix.LinMix(
+        #     x=data.data.loc[fit_mask_cosmo, "c"],
+        #     y=data.data.loc[fit_mask_cosmo, "x1_standardized"],
+        #     xsig=data.data.loc[fit_mask_cosmo, "cERR"],
+        #     ysig=data.data.loc[fit_mask_cosmo, "x1_standardized_ERR"],
+        # )
+        # lm_cosmo.run_mcmc(miniter=LINMIX_MIN_ITR)
+        # print(
+        #     f"\n* with LINMIX: Beta_cosmo = {np.median(lm_cosmo.chain['beta']):.3f} +/- {robust_scatter(lm_cosmo.chain['beta']):.3f}"
+        # )
 
-        fit_mask_red = 0.3 < data.data["c"]
-        lm_red = linmix.LinMix(
-            x=data.data.loc[fit_mask_red, "c"],
-            y=data.data.loc[fit_mask_red, "x1_standardized"],
-            xsig=data.data.loc[fit_mask_red, "cERR"],
-            ysig=data.data.loc[fit_mask_red, "x1_standardized_ERR"],
-        )
-        lm_red.run_mcmc(miniter=LINMIX_MIN_ITR)
-        print(
-            f"\n* with LINMIX: Beta_red = {np.median(lm_red.chain['beta']):.3f} +/- {robust_scatter(lm_red.chain['beta']):.3f}"
-        )
+        # fit_mask_red = 0.3 < data.data["c"]
+        # lm_red = linmix.LinMix(
+        #     x=data.data.loc[fit_mask_red, "c"],
+        #     y=data.data.loc[fit_mask_red, "x1_standardized"],
+        #     xsig=data.data.loc[fit_mask_red, "cERR"],
+        #     ysig=data.data.loc[fit_mask_red, "x1_standardized_ERR"],
+        # )
+        # lm_red.run_mcmc(miniter=LINMIX_MIN_ITR)
+        # print(
+        #     f"\n* with LINMIX: Beta_red = {np.median(lm_red.chain['beta']):.3f} +/- {robust_scatter(lm_red.chain['beta']):.3f}"
+        # )
     else:
         lm = None
         fit = None
