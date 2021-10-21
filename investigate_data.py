@@ -28,7 +28,7 @@ if __name__ == "__main__":
     VERBOSE = cli.verbose
 
     RUN_LINMIX = cli.linmix
-    C_MAX_FIT = 2.0  # cli.cmax # this is currently defined in several locations.
+    C_MAX_FIT = cli.cmax  # this is currently defined in several locations.
 
     c_splits = [0.3]  # was [0.1, 0.3] during initial analysis
 
@@ -175,6 +175,7 @@ if __name__ == "__main__":
         "c",
         "x1_standardized",
         fit=fit,
+        c_max_fit=C_MAX_FIT,
         filename="color-luminosity-BS21.png",
         fig_options={
             "sim_name": "BS21",

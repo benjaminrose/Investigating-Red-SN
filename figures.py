@@ -13,7 +13,6 @@ __all__ = ["plot_binned"]
 
 sns.set_theme(context="talk", style="ticks", font="serif", color_codes=True)
 USE_KS2D = False
-C_MAX_FIT = 2.0
 
 
 def plot_binned(
@@ -22,6 +21,7 @@ def plot_binned(
     x_col="c",
     y_col="HOST_LOGMASS",
     fit=None,
+    c_max_fit=2.0,
     show_data=True,
     # split_mass=False,
     filename="",
@@ -40,6 +40,7 @@ def plot_binned(
         DataFrame column name to use for y-axis (axis the summary statistic is applied).
     fit : linmix.LinMix.chain (None)
         The linear fit. Assumes it is from `linmix`. Does not plot anything value is None.
+    c_max_fit : float
     show_data: bool (True)
         If True, show data
     split_mass: bool (False)
@@ -109,7 +110,7 @@ def plot_binned(
     )
 
     if fit is not None:
-        _add_fit(ax, data_x, fit)
+        _add_fit(ax, data_x, fit, c_max_fit)
 
     _add_fig_options(ax, x_col, y_col, fig_options)
 
@@ -142,16 +143,14 @@ def plot_binned(
         )
 
 
-def _add_fit(ax, data_x, fit):
+def _add_fit(ax, data_x, fit, c_max_fit):
     # relevantly bring in global constant (from CLI) into local scope.
-    if C_MAX_FIT > data_x.max():
+    if c_max_fit > data_x.max():
         print(
-            f"{C_MAX_FIT = } is above {data_x.max() = }. Plot of linear fit will not go past the data.",
+            f"{c_max_fit = } is above {data_x.max() = }. Plot of linear fit will not go past the data.",
             end="\n\n",
         )
         c_max_fit = data_x.max()
-    else:
-        c_max_fit = C_MAX_FIT
 
     xs = np.arange(data_x.min(), c_max_fit, 0.01)
 
