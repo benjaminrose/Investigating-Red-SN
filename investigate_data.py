@@ -9,8 +9,14 @@ import numpy as np
 
 from fitres import Fitres
 from figures import plot_binned
-from model_fitting import rv_full_range, rv_least_squares
+from model_fitting import (
+    rv_full_range,
+    rv_least_squares,
+    rv_broken_linear_bayesian,
+    rv_broken_linear_frequentist,
+)
 from util import parse_cli
+import broken_linear
 
 
 if __name__ == "__main__":
@@ -80,8 +86,15 @@ if __name__ == "__main__":
     print("* with least-squares:")
     print("   *", linear_fit)
     # print("   *", quadratic_fit.convert())
-    # print("   *", cubic_fit.convert())
+    # print("   *", cucbic_fit.convert())
     print("")
+
+    # fitted = rv_broken_linear(
+    #     data.data.loc[fit_mask, ["c", "cERR", "x1_standardized", "x1_standardized_ERR"]]
+    # )
+    # print(f'beta_pymc3 = {fitted.posterior["c"].mean(dim=("chain", "draw"))}')
+    delta_rv_fit_freq = rv_broken_linear_frequentist(data, fit_mask)
+    print(broken_linear.chi_square_params2slopes(delta_rv_fit_freq.x))
 
     # Work with sim data
     ####
