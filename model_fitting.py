@@ -45,19 +45,14 @@ def rv_broken_linear_bayesian(data):
 
 
 def rv_broken_linear_frequentist(data, fit_mask):
-    # _chi_square(theta_cosmo, delta_theta, M_0, data, fitmask):
     res = minimize(
+        # chi_square(params, data, fit_mask):
+        # params = theta_cosmo, delta_theta, M_0
         broken_linear.chi_square,
-        # theta_cosmo, delta_theta, M_0,
         x0=[np.arctan(3.1), 0, -19.4],
         args=(data, fit_mask),
-        # x=data.data.loc[fit_mask, "c"],
-        # y=data.data.loc[fit_mask, "x1_standardized"],
-        # sigma=data.data.loc[fit_mask, "x1_standardized_ERR"],
-        # absolute_sigma=False,  ## default value, but idk.
-        # check_finite=True,
         bounds=(
-            (np.arctan(1.0), np.arctan(5.0)),
+            (np.arctan(0.5), np.arctan(6.0)),
             (np.arctan(-3.1), np.arctan(3.1)),
             (-20, -18),
         ),
