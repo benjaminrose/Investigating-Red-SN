@@ -26,10 +26,14 @@ def broken_linear(c, theta_cosmo, delta_theta, M_0, c_break=0.3):
     """
     m_cosmo = np.tan(theta_cosmo)
     delta_m = np.tan(delta_theta)
+    M_at_c_break = M_0 + m_cosmo * c_break
     return np.piecewise(
         c.values,
         c.le(c_break),
-        [lambda x: m_cosmo * x + M_0, lambda x: (m_cosmo + delta_m) * x + M_0],
+        [
+            lambda x: m_cosmo * (x - c_break) + M_at_c_break,
+            lambda x: (m_cosmo + delta_m) * (x - c_break) + M_at_c_break,
+        ],
     )
 
 
