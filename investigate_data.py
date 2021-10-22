@@ -94,6 +94,7 @@ if __name__ == "__main__":
     # )
     # print(f'beta_pymc3 = {fitted.posterior["c"].mean(dim=("chain", "draw"))}')
     delta_rv_fit_freq = rv_broken_linear_frequentist(data, fit_mask)
+    fit = delta_rv_fit_freq  # TODO: make it so we can use linmix or this.
     print(broken_linear.chi_square_params2slopes(delta_rv_fit_freq.x))
 
     # Work with sim data

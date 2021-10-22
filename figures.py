@@ -2,12 +2,14 @@
 """
 import seaborn as sns
 import numpy as np
+import pandas as pd
 
 from br_util.plot import save_plot, new_figure
 from br_util.stats import robust_scatter
 
 from util import bin_dataset
 from hypothesis_testing import ks2d
+from broken_linear import broken_linear
 
 __all__ = ["plot_binned"]
 
@@ -143,17 +145,7 @@ def plot_binned(
         )
 
 
-def _add_fit(ax, data_x, fit, c_max_fit):
-    # relevantly bring in global constant (from CLI) into local scope.
-    if c_max_fit > data_x.max():
-        print(
-            f"{c_max_fit = } is above {data_x.max() = }. Plot of linear fit will not go past the data.",
-            end="\n\n",
-        )
-        c_max_fit = data_x.max()
-
-    xs = np.arange(data_x.min(), c_max_fit, 0.01)
-
+def _add_fit_linmix(ax, fit, xs):
     # only plot every 25 chains. For 2000 chains, this is 4%
     downsample_frac = 0.15  # 5--10% may be better for a long chain
     # // floors it but still keeps it as a float.
@@ -186,18 +178,54 @@ def _add_fit(ax, data_x, fit, c_max_fit):
     #     + r" $\pm$ "
     #     + f"{robust_scatter(lm_red.chain['beta']):.2f}",
     # )
-    # ax.plot(
-    #     xs,
-    #     linear_fit.convert().coef[0] + xs * linear_fit.convert().coef[1],
-    #     label="Linear Least-Squares",
-    # )
-    # ax.plot(
-    #     xs,
-    #     quadratic_fit.convert().coef[0]
-    #     + xs * quadratic_fit.convert().coef[1]
-    #     + xs ** 2 * quadratic_fit.convert().coef[2],
-    #     label="Quadratic Least-Squares",
-    # )
+
+
+def _add_fit_broekn_freq(ax, fit, xs):
+    """
+    fit : scipy.optimize.OptimizeResult
+        Full output from something like scipy.optimize.minimize.
+    """
+    ys = broken_linear(pd.Series(xs), *fit.x)
+    ax.plot(
+        xs,
+        ys,
+        color="k",
+        label=r"$\beta=$"
+        + f"{np.tan(fit.x[0]):.2f}, "  # fit is over angle not slope
+        + r"$\Delta \beta=$"
+        + f"{np.tan(fit.x[1]):.2f}",
+    )
+
+
+# ax.plot(
+#     xs,
+#     linear_fit.convert().coef[0] + xs * linear_fit.convert().coef[1],
+#     label="Linear Least-Squares",
+# )
+# ax.plot(
+#     xs,
+#     quadratic_fit.convert().coef[0]
+#     + xs * quadratic_fit.convert().coef[1]
+#     + xs ** 2 * quadratic_fit.convert().coef[2],
+#     label="Quadratic Least-Squares",
+# )
+
+
+def _add_fit(ax, data_x, fit, c_max_fit):
+    FIT_TYPE = "broken_freq"  # TODO: Remove hard coding
+    if c_max_fit > data_x.max():
+        print(
+            f"{c_max_fit = } is above {data_x.max() = }. Plot of linear fit will not go past the data.",
+            end="\n\n",
+        )
+        c_max_fit = data_x.max()
+
+    xs = np.arange(data_x.min(), c_max_fit, 0.01)
+
+    if FIT_TYPE == "linmix":
+        _add_fit_linmix(ax, fit, xs)
+    elif FIT_TYPE == "broken_freq":
+        _add_fit_broekn_freq(ax, fit, xs)
 
 
 def _add_fig_options(ax, x_col, y_col, fig_options):
