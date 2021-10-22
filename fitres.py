@@ -82,7 +82,13 @@ class Fitres:
         return self.data
 
     def clean_data(
-        self, x1err_max=1.5, x1_max=3.0, cerr_max=0.15, c_min=-0.3, sim=False
+        self,
+        x1err_max=1.5,
+        x1_max=3.0,
+        cerr_max=0.15,
+        c_min=-0.3,
+        sim=False,
+        deduplicate=False,
     ):
         """Defulats follow Pantheon+.
 
@@ -96,6 +102,8 @@ class Fitres:
         - CUTWIN MWEBV 0 .3
         - cutwin_Trestmin: -9999.0 5.0
         """
+        if deduplicate:
+            self._deduplicate()
         # Apply Pantheon+ cleaning
         self._cut_x1err(x1err_max)
         self._cut_x1(x1_max)
@@ -202,6 +210,28 @@ class Fitres:
                 f"After-cuts cERR distribution:\n{self.data[['x1', 'x1ERR']].describe()}\n"
             )
         return self.data
+
+    def _deduplicate(self):
+        duplicates = self.data[self.data.index.duplicated(keep=False)]
+        singles = self.data[~self.data.index.duplicated(keep=False)]
+        while 0 < len(duplicates):
+            index = duplicates.index[0]
+            x1, c = duplicates.loc[index, ["x1", "c"]].mean()
+            x1_err_min, c_err_min = (
+                duplicates.loc[index, ["x1", "c"]].max()
+                - duplicates.loc[index, ["x1", "c"]].min()
+            )
+            x1_err, c_err = duplicates.loc[index, ["x1ERR", "cERR"]].max()
+            if x1_err < x1_err_min:
+                x1_err = x1_err_min
+            if c_err < c_err_min:
+                c_err = c_err_min
+            singles = singles.append(duplicates.loc[index].iloc[0])
+            singles.loc[index, ["x1", "c", "x1ERR", "cERR"]] = x1, c, x1_err, c_err
+            duplicates.drop(index, inplace=True)
+
+        self.data = singles
+        return self
 
     def plot_fitprob_binned_c(self, fitprob_cut=0.01):
         data, x, y, bins = self.data, "c", "FITPROB", 25  ## passed to bin_dataset

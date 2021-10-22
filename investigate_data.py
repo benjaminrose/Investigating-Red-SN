@@ -46,7 +46,7 @@ if __name__ == "__main__":
     print("# Investigating Highly Reddened SN\n")
 
     data = Fitres(data_file, alpha, VERBOSE)
-    data.clean_data(x1err_max, x1_max, cerr_max, c_min)
+    data.clean_data(x1err_max, x1_max, cerr_max, c_min, deduplicate=True)
     data.calc_HR()
 
     print("## Demographics of Sample\n")
