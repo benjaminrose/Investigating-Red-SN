@@ -51,7 +51,7 @@ def parse_cli():
     arg_parser.add_argument(
         "--cmax",
         type=float,
-        default=2.0,
+        default=1.3244,  # max in BS21 on Oct 22, 2021
         help="maximum c used in fitting BETA (default: %(default)s)",
     )
     arg_parser.add_argument(

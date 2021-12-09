@@ -252,7 +252,7 @@ class Fitres:
             (data_edges[:-1] + data_edges[1:]) / 2,
             data_stat * 100,  # Make a percent
             fmt="*",
-            label=f"Percent with FITPROB > {fitprob_cut}",
+            # label=f"Percent with FITPROB > {fitprob_cut}",
         )
 
         ax.set_xlabel("c")

@@ -1,8 +1,11 @@
 """Module containing my figure creating functions
 """
 import seaborn as sns
+from matplotlib.pyplot import savefig
 import numpy as np
 import pandas as pd
+import arviz as az
+import corner
 
 from br_util.plot import save_plot, new_figure
 from br_util.stats import robust_scatter
@@ -14,7 +17,6 @@ from broken_linear import broken_linear
 __all__ = ["plot_binned"]
 
 sns.set_theme(context="talk", style="ticks", font="serif", color_codes=True)
-USE_KS2D = False
 
 
 def plot_binned(
@@ -24,6 +26,7 @@ def plot_binned(
     y_col="HOST_LOGMASS",
     fit=None,
     c_max_fit=2.0,
+    bins=15,
     show_data=True,
     # split_mass=False,
     filename="",
@@ -43,6 +46,8 @@ def plot_binned(
     fit : linmix.LinMix.chain (None)
         The linear fit. Assumes it is from `linmix`. Does not plot anything value is None.
     c_max_fit : float
+    bins : int
+        Number of bins.
     show_data: bool (True)
         If True, show data
     split_mass: bool (False)
@@ -54,7 +59,7 @@ def plot_binned(
         Contrains user overrides to be used in figure creation. Keys are
         "sim_name", "data_name", "x_label", "y_label", "y_flip", "y_lim", "leg_loc".
     """
-    bins = 25
+    bins = 15
 
     # if split_mass:
     #     data_high = data.loc[data["HOST_LOGMASS"] > 10]
@@ -100,7 +105,7 @@ def plot_binned(
             yerr=sim_error,
             color="tab:pink",
             fmt="^",
-            label="Binned simulation",
+            label="Binned " + fig_options.get("sim_name", "simulation"),
         )
     ax.errorbar(
         (data_edges[:-1] + data_edges[1:]) / 2,
@@ -108,7 +113,7 @@ def plot_binned(
         yerr=data_error,
         color="tab:orange",
         fmt=">",
-        label="Binned data",
+        label="Binned " + fig_options.get("data_name", "Pantheon+"),
     )
 
     if fit is not None:
@@ -143,6 +148,31 @@ def plot_binned(
             filename,
             fig_options,
         )
+
+
+def posterior_corner(posterior, var_names, filename=""):
+    _, ax = new_figure()
+    corner.corner(
+        posterior[var_names],
+        quantiles=[0.16, 0.5, 0.84],
+        show_titles=True,
+        divergences=True,
+        # truths={"x": 1.5, "y": [-0.3, 0.1]}
+        smooth=0.75,
+        labelpad=0.2,
+        labels=[
+            r"$M_0$",
+            r"$\theta$",
+            r"$\Delta_{\theta}$",
+            r"$\sigma$",
+            r"$\mu_c$",
+            r"$\sigma_c$",
+            r"$\alpha_c$",
+        ],
+    )
+    savefig(
+        "figures/" + filename, bbox_inches="tight"
+    )  # removed bbox_inches="tight" from save_plot()
 
 
 def _add_fit_linmix(ax, fit, xs):
@@ -180,7 +210,7 @@ def _add_fit_linmix(ax, fit, xs):
     # )
 
 
-def _add_fit_broekn_freq(ax, fit, xs):
+def _add_fit_broken_freq(ax, fit, xs):
     """
     fit : scipy.optimize.OptimizeResult
         Full output from something like scipy.optimize.minimize.
@@ -194,6 +224,52 @@ def _add_fit_broekn_freq(ax, fit, xs):
         + f"{np.tan(fit.x[0]):.2f}, "  # fit is over angle not slope
         + r"$\Delta \beta=$"
         + f"{np.tan(fit.x[1]):.2f}",
+    )
+
+
+def _add_fit_broken_bayes(ax, fit, xs):
+    """
+    fit : stacked arviz.InferenceData.posterior
+        posterior part of the arviz.InferenceData. Should be
+        `fit = InferenceData.posterior.stack(draws=("chain", "draw"))`
+    """
+    downsample_frac = 0.10  # 5--10% may be better for a long chain
+    # // floors it but still keeps it as a float.
+    for i in range(
+        0,
+        fit.sizes["draws"],
+        round((fit.sizes["draws"] / downsample_frac) / fit.sizes["draws"]),
+    ):
+        ys = broken_linear(
+            xs,
+            fit["theta_cosmo"][i].values,
+            fit["delta_theta"][i].values,
+            fit["M0"][i].values,
+        )
+        if i == 0:
+            # add one nearly blank line in the legned
+            label = " "
+        else:
+            label = None
+        ax.plot(xs, ys, color="0.5", alpha=0.02, label=label)
+    ys = broken_linear(
+        xs,
+        fit["theta_cosmo"].median().values,
+        fit["delta_theta"].median().values,
+        fit["M0"].median().values,
+    )
+    ax.plot(
+        xs,
+        ys,
+        color="k",
+        label=r"$\beta=$"
+        + f"{np.tan(fit['theta_cosmo'].median().values):.2f}"
+        + r" $\pm$ "
+        + f"{robust_scatter(np.tan(fit['theta_cosmo'].values)):.2f}, "
+        + r"$\Delta \beta=$"
+        + f"{np.tan(fit['delta_theta'].median().values):.2f}"
+        + r" $\pm$ "
+        + f"{robust_scatter(np.tan(fit['delta_theta'].values)):.2f}",
     )
 
 
@@ -212,7 +288,7 @@ def _add_fit_broekn_freq(ax, fit, xs):
 
 
 def _add_fit(ax, data_x, fit, c_max_fit):
-    FIT_TYPE = "broken_freq"  # TODO: Remove hard coding
+    FIT_TYPE = "broken_bayes"  # TODO: Remove hard coding
     if c_max_fit > data_x.max():
         print(
             f"{c_max_fit = } is above {data_x.max() = }. Plot of linear fit will not go past the data.",
@@ -225,7 +301,9 @@ def _add_fit(ax, data_x, fit, c_max_fit):
     if FIT_TYPE == "linmix":
         _add_fit_linmix(ax, fit, xs)
     elif FIT_TYPE == "broken_freq":
-        _add_fit_broekn_freq(ax, fit, xs)
+        _add_fit_broken_freq(ax, fit, xs)
+    elif FIT_TYPE == "broken_bayes":
+        _add_fit_broken_bayes(ax, fit, xs)
 
 
 def _add_fig_options(ax, x_col, y_col, fig_options):
@@ -249,17 +327,57 @@ def _data_v_sim(
     filename,
     fig_options,
 ):
-    ks_p, data_step, sim_step = ks2d(
-        data_x, data_y, sim_x, sim_y, fig_options, USE_KS2D
-    )
+    print("Running KS2D ...")
+    ks_p, n_samples = ks2d(data_x.values, data_y.values, sim_x.values, sim_y.values)
+    for _ in range(500):
+        ks_p = np.append(
+            ks_p,
+            ks2d(
+                data_x.values,
+                data_y.values,
+                sim_x.values,
+                sim_y.values,
+            )[0],
+        )
 
     print(f"For {filename},")
     print(
-        f"KS-test of binned stats: {ks_p:.3g}. With N=({len(data_x[::data_step])}, {len(sim_y[::sim_step])})."
+        f"2D KS-test: {np.median(ks_p):.3g} +/- {robust_scatter(ks_p):.3g}. With N=({n_samples})."
     )
     chi_square = np.nansum(
         (data_stat - sim_stat) ** 2 / (sim_error ** 2 + data_error ** 2)
     )
-    print(f"reduced chi-2 binned stats: {chi_square/bins:.3f}\n")
+    print(f"Chi-2 binned stats: {chi_square:.3f}\n")
     # I want the Mann-Whitney-U of the data in each bin.
     # Then somehow compute a single value from the 25 Mann-Whitney-U values.
+
+
+def bhm_diagnostic_plots(data, var_names=None):
+    """arviz.InferenceData"""
+    print(az.summary(data, var_names=var_names))
+
+    az.plot_posterior(data, var_names=var_names)
+    save_plot("diagnostics/posterior.pdf")
+
+    az.plot_autocorr(
+        data,
+        var_names=var_names,
+        combined=True,
+    )
+    save_plot("diagnostics/autocorr.pdf")
+
+    az.plot_trace(data, var_names=var_names)
+    save_plot("diagnostics/trace.png")
+
+    ax = az.plot_ppc(data, observed=False, num_pp_samples=45, random_seed=42)
+    sns.histplot(
+        data.observed_data["c"].values, stat="density", ax=ax[0], label="Observed"
+    )
+    sns.histplot(data.observed_data["M'"].values, stat="density", ax=ax[1])
+    ax[0].set_xlabel("c")
+    ax[1].set_xlabel("M' (mag)")
+    ax[0].legend(loc="upper right")
+    save_plot("posterior_check.pdf")
+
+    # az.plot_ppc(data, group="prior")
+    # save_plot("prior_check.pdf")

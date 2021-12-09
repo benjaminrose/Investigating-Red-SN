@@ -18,6 +18,9 @@ dependencies:
   - seaborn
   - bambi
   - pymc3
+  - python-graphviz
+  - mkl-service
+  - corner
   - pip:
     - git+https://github.com/jmeyers314/linmix.git#egg=linmix
     - git+https://github.com/benjaminrose/br-util.git#egg=br_util
