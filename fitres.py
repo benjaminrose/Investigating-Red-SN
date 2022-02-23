@@ -218,6 +218,8 @@ class Fitres:
         singles = self.data[~self.data.index.duplicated(keep=False)]
         while 0 < len(duplicates):
             index = duplicates.index[0]
+            if len(duplicates.loc[index, ["x1"]]) > 4:
+                print(duplicates.loc[index, ["IDSURVEY", "x1", "c", "x1ERR", "cERR"]])
             x1, c = duplicates.loc[index, ["x1", "c"]].mean()
             x1_err_min, c_err_min = (
                 duplicates.loc[index, ["x1", "c"]].max()

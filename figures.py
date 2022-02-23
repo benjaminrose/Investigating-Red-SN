@@ -519,6 +519,7 @@ def chi2_bin():
     ax.plot(delta_c, c11, "-.", label="C11")
     ax.plot(delta_c, g10, "--", label="G10")
     ax.invert_xaxis()
+    ax.set_ylim(0.0, 2.1)
     ax.set_xlabel(r"$c$ bin width")
     ax.set_ylabel(r"$\chi^2_{\nu}$")
     ax.legend()
