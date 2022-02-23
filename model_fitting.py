@@ -17,12 +17,9 @@ import broken_linear
 
 # defaults to 5000, 2000 is good for our our data set, 500 for fast
 LINMIX_MIN_ITR = 1000
-PYMC_TUNE = 1000
-PYMC_DRAWS = 750
-PYMC_CHAINS = 4
 
 
-def rv_full_range(data, fit_mask):
+def rv_full_range(data, fit_mask, comment=""):
     lm = linmix.LinMix(
         x=data.data.loc[fit_mask, "c"],
         y=data.data.loc[fit_mask, "x1_standardized"],
@@ -32,7 +29,7 @@ def rv_full_range(data, fit_mask):
     lm.run_mcmc(miniter=LINMIX_MIN_ITR)
     print(
         Fore.BLUE
-        + f"* with LINMIX: Beta = {np.median(lm.chain['beta']):.3f} +/- {robust_scatter(lm.chain['beta']):.3f}"
+        + f"* with LINMIX{comment}: Beta = {np.median(lm.chain['beta']):.3f} +/- {robust_scatter(lm.chain['beta']):.3f}"
         + Style.RESET_ALL
     )
     return lm.chain
@@ -46,34 +43,38 @@ def rv_least_squares(data, fit_mask, high_degree_fits=False):
     return linear_fit.convert()
 
 
-def rv_broken_linear_bayesian(data):
+def rv_broken_linear_bayesian(data, fast=False):
     """PyMC3's normal and skew normal distributions can be passed the keyword
     `sigma` to use the standard deviation scale parameter. This is what we did
     in the code, however our notation in the paper ($\mathcal{N} \sim (\mu, \sigma^2)$)
     uses the more common notational practice of using the variance scale parameter.
     """
-    # model = bambi.Model("x1_standardized ~ c", data)
-    # model.build()
-    # model.graph(name="model", fmt="pdf")
-    # return model.fit(draws=1000)
+    if fast:
+        PYMC_TUNE = 100
+        PYMC_DRAWS = 100
+        PYMC_CHAINS = 2
+    else:
+        PYMC_TUNE = 10000
+        PYMC_DRAWS = 1000
+        PYMC_CHAINS = 2
 
     coords = {"observation": np.arange(data.shape[0]), "vars": np.arange(2)}
     with pm.Model(coords=coords) as model:
         # Model Variables
-        theta_cosmo = pm.Uniform(
-            "theta_cosmo", lower=1.2, upper=1.45
-        )  # mu=1.258, sd=0.1)
-        delta_theta = pm.Normal("delta_theta", mu=0, sigma=0.15)
-        M0 = pm.Uniform("M0", lower=-19.4, upper=-19.2)
+        theta_cosmo = pm.Uniform("θ", lower=1.2, upper=1.3)
+        delta_theta = pm.Normal("Δ_θ", mu=0, sigma=0.15)
+        M0 = pm.Uniform("M_0", lower=-19.4, upper=-19.2)
         sigma_int = pm.HalfCauchy(
-            "sigma_int", 0.05
+            "σ", 0.05
         )  # variance of epsilon distribution in Kelly2007 eqn 1.
+        # somehow with HalfNormal or HalfCauchy, this is going to 6.6 sigma on the prior
+        # sigma_int = pm.Uniform("σ", lower=0.01, upper=0.3)
 
         # Hyper parameters
         # sigma_squared = pm.Uniform("sigma^2", 0, 0.1)
-        c_pop_mean = pm.Cauchy("c_pop_mean", alpha=0, beta=0.3)  # 0
-        c_pop_scatter = pm.Uniform("c_pop_sigma", lower=0.01, upper=0.2)  # 0.1
-        c_pop_skewness = pm.Uniform("c_pop_skewness", lower=-0.1, upper=2.0)  # 0.1
+        c_pop_mean = pm.Cauchy("μ_c", alpha=0, beta=0.3)  # 0
+        c_pop_scatter = pm.Uniform("σ_c", lower=0.01, upper=0.2)  # 0.1
+        c_pop_skewness = pm.Uniform("α_c", lower=-0.1, upper=2.0)  # 0.1
 
         # "True space" parameters
         c_true = pm.SkewNormal(  # I don't need LINMIX's Gaussian Mixture, I know I have a SkewNormal and PPC verifies this assumption
@@ -98,29 +99,6 @@ def rv_broken_linear_bayesian(data):
         )
 
         # Observed space parameters
-        # shape == (observations, 2) or (obs, 2, 2) for cov
-        ## cov = np.zeros((len(data["x1_standardized_ERR"]), 2, 2))
-        ## cov[:, 0, 0] = data["x1_standardized_ERR"]
-        ## cov[:, 1, 1] = data["cERR"]
-        # M_err = pm.Data("M'_err", data["x1_standardized_ERR"], dims="observation")
-        # c_err = pm.Data("c_err", data["cERR"], dims="observation")
-        # # cov = tt.stack(([M_err, 0], [0, c_err]))
-        # # cov = tt.stack((M_err, c_err))
-        # # breakpoint()
-        # cov = np.array(
-        #     [[1, 0], [0, 1]]
-        # )  # cov = tt.stack([[M_err, np.zeros(1808)], [np.zeros(1808), c_err]])
-        # # chol, _, _ = pm.LKJCholeskyCov('chol_cov', n=1808, eta=1, sd_dist=sd, compute_corr=True)
-        # # no off diagonal terms
-        # mu = tt.stack([M_true, c_true], axis=1)
-        # obs = np.stack((data["x1_standardized"], data["c"]), axis=1)
-        # # vals = pm.MvNormal("vals", mu=mu, cov=cov, shape=(5, 2))
-        # vals = pm.MvNormal(
-        #     "vals",
-        #     mu=mu,
-        #     cov=cov,
-        #     observed=obs,  # , dims=("observation", "vars"), shape=(1808,2)
-        # )
         M_obs = pm.Normal(
             "M'",
             mu=M_true,
@@ -170,7 +148,7 @@ def _least_squares(data, fit_mask, deg):
     fit, error = Polynomial.fit(
         x=data.data.loc[fit_mask, "c"],
         y=data.data.loc[fit_mask, "x1_standardized"],
-        w=data.data.loc[fit_mask, "x1_standardized_ERR"],
+        # w=data.data.loc[fit_mask, "x1_standardized_ERR"],
         full=True,
         deg=deg,
     )

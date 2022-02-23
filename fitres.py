@@ -29,7 +29,7 @@ class Fitres:
             "bins": "auto",
             "element": "step",
             "fill": False,
-            "stat": "probability",
+            "stat": "density",
         }
         self.cumulative_plot_keywords = {
             **self.histplot_keywords,
@@ -53,7 +53,9 @@ class Fitres:
         """
         self.data["mu_theory"] = COSMO.distmod(self.data["zHD"]).value
         self.data["x1_standardized"] = (
-            self.data["mB"] - self.data["mu_theory"] - self.alpha * self.data["x1"]
+            self.data["mB"]
+            - self.data["mu_theory"]
+            + np.abs(self.alpha) * self.data["x1"]
         )
         self.data["x1_standardized_ERR"] = np.sqrt(
             # mb error, no cosmology error, x1 error
@@ -98,7 +100,7 @@ class Fitres:
         - cmin=-0.3
         - CUTWIN cERR 0 .15
         - CUTWIN x1ERR 0 1.5
-        - CUTWIN PKMJDERR 0 20
+        - CUTWIN PKMJDERR 0 2.0
         - CUTWIN MWEBV 0 .3
         - cutwin_Trestmin: -9999.0 5.0
         """
@@ -109,7 +111,7 @@ class Fitres:
         self._cut_x1(x1_max)
         self._cut_cerr(cerr_max)
         self._cut_c(c_min)
-        self._cut_PKMJDERR(20)  # checking once, no SN effected
+        self._cut_PKMJDERR(2.0)
         self._cut_MWEBV(0.3)  # checking once, ~25% of SN effected
         if not sim:
             self._cut_Trestmin(5.0)  # checking once, no SN effected
@@ -233,7 +235,14 @@ class Fitres:
         self.data = singles
         return self
 
-    def plot_fitprob_binned_c(self, fitprob_cut=0.01):
+    def plot_fitprob_binned_c(self, fitprob_cut=0.001):
+        """
+        'We follow past analyses of specific samples in order to employ
+        a minimum Pfit cut: this is done for DES, PS1, and SDSS with
+        levels of 0.01, 0.001, and 0.001, respectively.' - Scolnic+ 2022
+        - Therefore, I will use fitprob_cut of 0.001 (not 0.01), but this
+        does not change much.
+        """
         data, x, y, bins = self.data, "c", "FITPROB", 25  ## passed to bin_dataset
         data_mask = data[x] > -0.5
         data_x_axis = data.loc[data_mask, x]
@@ -251,13 +260,13 @@ class Fitres:
         ax.errorbar(
             (data_edges[:-1] + data_edges[1:]) / 2,
             data_stat * 100,  # Make a percent
-            fmt="*",
+            fmt=".",
             # label=f"Percent with FITPROB > {fitprob_cut}",
         )
 
         ax.set_xlabel("c")
         ax.set_ylabel("Percent pass")
-        ax.legend()
+        # ax.legend()
         save_plot("fitprob_c.pdf")
 
     def plot_hist(self, key, filename=""):
@@ -269,10 +278,26 @@ class Fitres:
             cumulative=False,
             bins="auto",
             element="step",
-            # **self.histplot_keywords,
+            fill=False,
         )
         if key == "c":
-            ax.set_yscale("log")
+            sns.rugplot(
+                data=self.data[~self.data.index.duplicated(keep="first")],
+                x=key,
+                height=-0.02,
+                lw=1,
+                clip_on=False,
+                ax=ax,
+            )
+            ax.fill(
+                [-0.3, -0.3, 0.3, 0.3],
+                [180, -10, -10, 180],
+                facecolor="black",
+                edgecolor="none",
+                alpha=0.1,
+            )
+            ax.set_ylim(0, 174)
+            sns.despine()
         save_plot(filename)
 
     def plot_hists(self, key="FITPROB", filename=""):
@@ -285,12 +310,16 @@ class Fitres:
             ~self.red_subsample.index.duplicated(keep="first")
         ]
 
+        keywords = self.histplot_keywords
+        if key == "zHD":
+            keywords["stat"] = "proportion"
+
         ax = sns.histplot(
             data=sub_set1,
-            label=f"c <= {self.c_split}",
+            label=r"c $<=$" + f"{self.c_split}",
             x=key,
             color="b",
-            **self.histplot_keywords,
+            **keywords,
         )
         sns.histplot(
             data=sub_set2,
@@ -298,9 +327,19 @@ class Fitres:
             ax=ax,
             label=f"c > {self.c_split}",
             color="r",
-            **self.histplot_keywords,
+            ls="--",
+            **keywords,
         )
         ax.legend()
+
+        if key == "zHD":
+            ax.set_xlim(0.0, 1.0)
+
+        ax.axes.yaxis.set_ticklabels([])
+        ax.axes.yaxis.set_ticks([])
+        # ax.axes.yaxis.set_visible(False) # even remvoes label.
+        ax.set_ylabel("Relative Count")  # I know it is a lie, but no one cares.
+        sns.despine()
 
         print(
             f"KS test (two-sided) p-value for {filename}: {ks1d(sub_set1[key], sub_set2[key])}."
