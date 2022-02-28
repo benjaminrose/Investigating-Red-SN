@@ -5,6 +5,7 @@ __version__ = "2021-09"
 from argparse import ArgumentParser, BooleanOptionalAction
 
 from scipy.stats import binned_statistic
+from numpy import logical_and, isnan
 
 from br_util.stats import robust_scatter
 
@@ -25,7 +26,6 @@ def bin_dataset(data, x, y, bins=25, error_stat=robust_scatter):
         Passed to scipy.stats.binned_statistic. Defaults to
         `br_util.stats.robust_scatter`.
     """
-    SCATTER_FLOOR = 0.1
     data = data.dropna(subset=[x, y])
     data_x_axis = data[x]
     data_y_axis = data[y]
@@ -36,7 +36,23 @@ def bin_dataset(data, x, y, bins=25, error_stat=robust_scatter):
     data_error, _, _ = binned_statistic(
         data_x_axis, data_y_axis, statistic=error_stat, bins=bins
     )
-    data_error[data_error == 0] = SCATTER_FLOOR
+    # data_error[data_error == 0] = SCATTER_FLOOR
+    for i, binned_error_bar in enumerate(data_error):
+        # if no error but there is data, then there is only one datapoint in bin.
+        if binned_error_bar == 0 and not isnan(data_stat[i]):
+            in_bin = logical_and(
+                # From https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.binned_statistic.html
+                # All but the last (righthand-most) bin is half-open. In other words,
+                # if bins is [1, 2, 3, 4], then the first bin is [1, 2)
+                # (including 1, but excluding 2) and the second [2, 3). The last bin,
+                # however, is [3, 4], which includes 4.
+                # From me, somehow, it fails unless I invert it (1, 2].
+                data_edges[i] < data_x_axis,
+                data_x_axis <= data_edges[i + 1],
+            )
+            data_error[i] = data.loc[
+                in_bin, y + "_ERR"
+            ].values  # assume this is "x1_standardized_ERR"
     return data_x_axis, data_y_axis, data_stat, data_edges, data_error
 
 
@@ -77,6 +93,12 @@ def parse_cli():
         type=float,
         default=0.15,
         help="used for light-curve shape standardization (default: %(default)s)",
+    )
+    arg_parser.add_argument(
+        "--all",
+        action="store_true",
+        default=False,
+        help="include parts that are no longer in main analysis (default: %(default)s)",
     )
     arg_parser.add_argument(
         "-v",

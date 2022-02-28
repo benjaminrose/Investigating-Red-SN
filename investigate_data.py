@@ -37,6 +37,7 @@ if __name__ == "__main__":
     VERBOSE = cli.verbose
 
     FAST = cli.fast
+    ALL = cli.all
     if FAST:
         RUN_LINMIX = False
     else:
@@ -114,7 +115,8 @@ if __name__ == "__main__":
 
         sys.exit()
 
-    if not FAST:
+    # if not FAST:
+    if True:
         G10 = Fitres(Path("data/G10_SIMDATA.FITRES"), alpha)
         G10.clean_data(x1err_max, x1_max, cerr_max, c_min, sim=True)
         G10.calc_HR()
@@ -221,10 +223,11 @@ if __name__ == "__main__":
         # lm = None
         fit = None
 
-    linear_fit = rv_least_squares(data, fit_mask)
-    print("* with least-squares:")
-    print("   *", linear_fit)
-    print("")
+    if ALL:
+        linear_fit = rv_least_squares(data, fit_mask)
+        print("* with least-squares:")
+        print("   *", linear_fit)
+        print("")
 
     fitted = rv_broken_linear_bayesian(
         data.data.loc[
@@ -262,11 +265,12 @@ if __name__ == "__main__":
                 "σ",
             ],
         )
-    delta_rv_fit_freq = rv_broken_linear_frequentist(data, fit_mask)
-    print(
-        "Reduced Chi-square:",
-        broken_linear.chi_square_params2slopes(delta_rv_fit_freq.x),
-    )
+    if ALL:
+        delta_rv_fit_freq = rv_broken_linear_frequentist(data, fit_mask)
+        print(
+            "Reduced Chi-square:",
+            broken_linear.chi_square_params2slopes(delta_rv_fit_freq.x),
+        )
 
     # Plots
     ###
@@ -279,8 +283,8 @@ if __name__ == "__main__":
             data.plot_hists("HOST_LOGMASS", f"mass_dist_{c_split}.pdf")
             data.plot_hists("zHD", f"redshift_dist_{c_split}.pdf")
             print("")
-
-        data.plot_fitprob_binned_c()
+        if ALL:
+            data.plot_fitprob_binned_c()
 
         data.plot_hist("c", f"c_dist.pdf")
 
@@ -300,38 +304,39 @@ if __name__ == "__main__":
 
     print("## Data vs Sims\n")
     if not FAST:
-        plot_binned(
-            data.data.loc[data.data["HOST_LOGMASS"] > 10],
-            BS21.data.loc[BS21.data["HOST_LOGMASS"] > 10],
-            x_col="c",
-            y_col="x1_standardized",
-            bins=BINS,
-            filename="color-luminosity-high_mass.png",
-            fig_options={
-                "data_name": "High Mass Hosts",
-                "sim_name": "BS21",
-                # TODO: define this elsewhere rather than copy and paste.
-                # "y_label": "mB - mu(z) - 0.15 * x1",
-                "y_label": r"M$'$ (mag)",
-                "y_flip": True,
-                "ylim": [-14.5, -21.5],
-            },
-        )
-        plot_binned(
-            data.data.loc[data.data["HOST_LOGMASS"] <= 10],
-            BS21.data.loc[BS21.data["HOST_LOGMASS"] <= 10],
-            x_col="c",
-            y_col="x1_standardized",
-            bins=BINS,
-            filename="color-luminosity-low_mass.png",
-            fig_options={
-                "data_name": "Low Mass Hosts",
-                "sim_name": "P22",
-                "y_label": r"M$'$ (mag)",
-                "y_flip": True,
-                "ylim": [-14.5, -21.5],
-            },
-        )
+        if ALL:
+            plot_binned(
+                data.data.loc[data.data["HOST_LOGMASS"] > 10],
+                BS21.data.loc[BS21.data["HOST_LOGMASS"] > 10],
+                x_col="c",
+                y_col="x1_standardized",
+                bins=BINS,
+                filename="color-luminosity-high_mass.png",
+                fig_options={
+                    "data_name": "High Mass Hosts",
+                    "sim_name": "BS21",
+                    # TODO: define this elsewhere rather than copy and paste.
+                    # "y_label": "mB - mu(z) - 0.15 * x1",
+                    "y_label": r"M$'$ (mag)",
+                    "y_flip": True,
+                    "ylim": [-14.5, -21.5],
+                },
+            )
+            plot_binned(
+                data.data.loc[data.data["HOST_LOGMASS"] <= 10],
+                BS21.data.loc[BS21.data["HOST_LOGMASS"] <= 10],
+                x_col="c",
+                y_col="x1_standardized",
+                bins=BINS,
+                filename="color-luminosity-low_mass.png",
+                fig_options={
+                    "data_name": "Low Mass Hosts",
+                    "sim_name": "P22",
+                    "y_label": r"M$'$ (mag)",
+                    "y_flip": True,
+                    "ylim": [-14.5, -21.5],
+                },
+            )
         plot_binned(
             data.data,
             # BS21.data,

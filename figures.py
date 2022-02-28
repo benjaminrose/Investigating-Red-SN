@@ -63,8 +63,6 @@ def plot_binned(
         Contrains user overrides to be used in figure creation. Keys are
         "sim_name", "data_name", "x_label", "y_label", "y_flip", "y_lim", "leg_loc".
     """
-    # bins = 15
-
     # if split_mass:
     #     data_high = data.loc[data["HOST_LOGMASS"] > 10]
     #     data_low = data.loc[data["HOST_LOGMASS"] <= 10]
@@ -371,20 +369,6 @@ def _add_fit_broken_bayes(ax, fit, xs):
         + r" $\pm$ "
         + f"{robust_scatter(np.tan(fit['Δ_θ'].values)):.2f}",
     )
-
-
-# ax.plot(
-#     xs,
-#     linear_fit.convert().coef[0] + xs * linear_fit.convert().coef[1],
-#     label="Linear Least-Squares",
-# )
-# ax.plot(
-#     xs,
-#     quadratic_fit.convert().coef[0]
-#     + xs * quadratic_fit.convert().coef[1]
-#     + xs ** 2 * quadratic_fit.convert().coef[2],
-#     label="Quadratic Least-Squares",
-# )
 
 
 def _add_fit(ax, data_x, fit, c_max_fit):
