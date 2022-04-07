@@ -1,6 +1,8 @@
 """Module containing my figure creating functions
 """
 from collections import Counter
+from pickle import TRUE
+from pkgutil import extend_path
 
 import seaborn as sns
 from matplotlib.pyplot import savefig
@@ -9,6 +11,7 @@ import pandas as pd
 import arviz as az
 import corner
 from scipy.stats import binned_statistic
+from statsmodels.nonparametric.kernel_regression import KernelReg
 
 from br_util.plot import save_plot, new_figure
 from br_util.stats import robust_scatter
@@ -154,20 +157,20 @@ def plot_binned(
 
     save_plot(filename)
 
-    if sim is not None:
-        _data_v_sim(
-            data_x,
-            data_y,
-            data_stat,
-            data_error,
-            sim_x,
-            sim_y,
-            sim_stat,
-            sim_error,
-            bins,
-            filename,
-            fig_options,
-        )
+    # if sim is not None:
+    #     _data_v_sim(
+    #         data_x,
+    #         data_y,
+    #         data_stat,
+    #         data_error,
+    #         sim_x,
+    #         sim_y,
+    #         sim_stat,
+    #         sim_error,
+    #         bins,
+    #         filename,
+    #         fig_options,
+    #     )
 
 
 def posterior_corner(posterior, var_names, filename=""):
@@ -177,6 +180,7 @@ def posterior_corner(posterior, var_names, filename=""):
         quantiles=[0.16, 0.5, 0.84],
         show_titles=True,
         divergences=True,
+        title_fmt=".3f",
         # truths={"x": 1.5, "y": [-0.3, 0.1]}
         smooth=1.25,
         labelpad=0.2,
@@ -244,6 +248,27 @@ def plot_rms_c(data, fit, c_max_fit, bins, filename="rms-c.pdf"):
             xerr=x_error,
             fmt=".",
         )
+        p = np.polyfit(
+            (data_edges[:-1] + data_edges[1:]) / 2,
+            data_stat,
+            2,
+        )
+        print(f"Polly fit for RMS-c: {p}")
+        print(
+            "Function for chi^2 hard codes this as: -2.60c**3 + 2.81c**2 + 0.31c + 0.17"
+        )
+
+        # I want to define this in one function and use it in another.
+        global kr
+        kr = KernelReg(data_stat, (data_edges[:-1] + data_edges[1:]) / 2, "c")
+
+        xs = np.linspace(
+            (data_edges[0] + data_edges[1]) / 2,
+            (data_edges[-2] + data_edges[-1]) / 2,
+            100,
+        )
+        ax.plot(xs, kr.fit(xs)[0], label="Polynomial Fit")
+
     else:
         counted = Counter(binnumber)
         N_per_bin = []
@@ -399,46 +424,101 @@ def _add_fig_options(ax, x_col, y_col, fig_options):
 
 
 def _data_v_sim(
-    data_x,
-    data_y,
-    data_stat,
-    data_error,
-    sim_x,
-    sim_y,
+    data,
     sim_stat,
-    sim_error,
-    bins,
-    filename,
-    fig_options,
+    # sim_error,
+    Nbins,
+    reduced=True,
 ):
-    print("Running KS2D ...")
-    iterations = 500
-    ks_p = np.empty(iterations)
-    ks_p[0], n_samples = ks2d(data_x.values, data_y.values, sim_x.values, sim_y.values)
-    for i in range(iterations - 1):
-        ks_p[i + 1] = ks2d(
-            data_x.values,
-            data_y.values,
-            sim_x.values,
-            sim_y.values,
-        )[0]
+    """
+    data_, sim_: pandas.Series
 
-    print(f"For {filename},")
-    print(
-        f"2D KS-test: {np.median(ks_p):.3g} +/- {robust_scatter(ks_p):.3g}. With N=({n_samples})."
-    )
-    # replace all 1 item bins with nan.
-    sim_stat[sim_error == 0.1] = np.nan
-    data_stat[data_error == 0.1] = np.nan
-    chi_numerator = (data_stat - sim_stat) ** 2
-    chi_denominator = data_error**2
+    Return
+    ------
+    float:
+        Reduced Chi^2 value between `data` and `sim`.
+    """
+
+    # NEW chi-squared method.
+    # add a column that states the c-bin number. Use that number to pull from the binned sim_stat
+    data["c_bins"] = pd.cut(data["c"], Nbins, labels=range(Nbins))
+    theory_y_values = []
+    theory_error = []
+    for i in data["c_bins"].values:
+        theory_y_values.append(sim_stat[i])
+        # theory_error.append(sim_error[i])
+    theory_y_values = np.array(theory_y_values)
+    # theory_error = np.array(theory_error)
+
+    chi_numerator = (data["x1_standardized"].values - theory_y_values) ** 2
+    # chi_denominator = _rms(data["c"]) ** 2
+    chi_denominator = kr.fit(data["c"])[0] ** 2
+    if False:
+        new_figure()
+        ax = sns.histplot(
+            data=chi_numerator / chi_denominator,
+            color="b",
+            cumulative=False,
+            bins="auto",
+            element="step",
+            fill=False,
+        )
+        sns.rugplot(
+            data=chi_numerator / chi_denominator,
+            height=-0.02,
+            lw=1,
+            clip_on=False,
+            ax=ax,
+        )
+        ax.set_xlabel("chi^2")
+        print(len(chi_numerator))
+        # print(
+        #     data.loc[
+        #         chi_numerator / chi_denominator > 5,
+        #         ["zHD", "c", "x1_standardized", "cERR", "x1_standardized_ERR"],
+        #     ]
+        # )
+        # print((chi_numerator / chi_denominator)[chi_numerator / chi_denominator > 5])
+        # print(
+        #     chi_numerator[chi_numerator / chi_denominator > 5],
+        #     chi_denominator[chi_numerator / chi_denominator > 5],
+        # )
+        # print(
+        #     "0.5 < c < 1.0\n",
+        #     data.loc[
+        #         np.logical_and(0.5 < data["c"], data["c"] < 1.0),
+        #         ["zHD", "c"],
+        #     ],
+        #     "\n",
+        #     chi_numerator[np.logical_and(0.5 < data["c"], data["c"] < 1.0)],
+        #     "\n",
+        #     chi_denominator[np.logical_and(0.5 < data["c"], data["c"] < 1.0)],
+        #     "\n",
+        #     data.iloc[
+        #         [np.logical_and(0.5 < data["c"], data["c"] < 1.0)], "x1_standardized"
+        #     ].values,
+        #     "\n",
+        #     theory_y_values[np.logical_and(0.5 < data["c"], data["c"] < 1.0)],
+        # )
+
+        from matplotlib.pyplot import show
+
+        show()
+        import sys
+
+        sys.exit()
+    # a nan in sim_stat will propigate to the chi_square.
     chi_square = np.nansum(chi_numerator / chi_denominator)
-    dof = np.count_nonzero(~np.isnan(chi_numerator / chi_denominator))
-    print("Chi-2 numerator:", chi_numerator)
-    print("Chi-2 denominator:", chi_denominator)
-    print(f"Chi-2 binned stats: {chi_square:.3f},(N={dof}), {chi_square/dof:.3f}\n")
-    # I want the Mann-Whitney-U of the data in each bin.
-    # Then somehow compute a single value from the 25 Mann-Whitney-U values.
+    # use non-nan length of theory_y_values over len(data) to account for dropped data that is in an empty sim bin
+    if reduced:
+        dof = np.count_nonzero(~np.isnan(theory_y_values))
+    else:
+        dof = 1.0
+
+    # print(f"Chi-2 numerator {chi_numerator}")
+    # print(f"Chi-2 denominator {chi_denominator.values}")
+    # print(f"Chi-2 binned stats: {chi_square:.3f},(N={dof}), {chi_square/dof:.3f}\n")
+    return chi_square / dof
 
 
 def bhm_diagnostic_plots(data, var_names=None):
@@ -474,39 +554,234 @@ def bhm_diagnostic_plots(data, var_names=None):
     # save_plot("prior_check.pdf")
 
 
-def chi2_bin():
-    bins = np.array([5, 7, 9, 11, 15, 20, 25, 50, 100])
-    g10 = np.array([0.421, 0.268, 0.510, 0.461, 0.903, 1.742, 5.700, 0.690, 0.904])
-    c11 = np.array([0.200, 0.085, 0.405, 0.291, 0.662, 0.372, 0.714, 0.904, 1.006])
-    m11 = np.array([0.559, 0.382, 0.569, 0.462, 0.844, 0.842, 0.769, 0.642, 0.831])
-    bs21 = np.array([0.176, 0.178, 0.450, 0.175, 0.263, 0.137, 0.230, 0.317, 0.429])
-    # sim = np.aray([0.058, 11.731, 8.976, 8.508, 6.131, 2.134, 3.006, 95.944, 142.506])
-    delta_c = (0.3 + 1.74) / bins
+def _rms(c, degree=2):
+    # 3-degrees, -2.60842542 * c**3 + 2.81549634 * c**2 + 0.31497116 * c + 0.1741919
+    # 2-degrees, 0.30437141 * c**2 + 0.25717747 * c + 0.19878428
+    if degree == 3:
+        return -2.60842542 * c ** 3 + 2.81549634 * c ** 2 + 0.31497116 * c + 0.1741919
+    else:
+        return 0.30437141 * c ** 2 + 0.25717747 * c + 0.19878428
+
+
+def chi2_bin(data, g10, c11, m11, bs21):
+    x_col, y_col = "c", "x1_standardized"
+    # bins = np.array([9, 11, 15, 20, 25, 50, 100])
+    bins = np.array([20, 25, 50, 100])
+
+    g10_chi = []
+    c11_chi = []
+    m11_chi = []
+    bs21_chi = []
+    iteration = 0
+    for sim in [g10, c11, m11, bs21]:
+        for bin in bins:
+            print(iteration, bin)
+            # define bins on data, not on sims.
+            _, _, _, data_edges, _ = bin_dataset(data, x_col, y_col, bins=bin)
+            # get median values of the sims, pass this to _data_v_sim.
+            _, _, sim_stat, _, _ = bin_dataset(sim, x_col, y_col, bins=data_edges)
+            # Keep uncertainties fixed and not floating between data sets.
+            # _, _, _, _, sim_error = bin_dataset(bs21, x_col, y_col, bins=data_edges)
+
+            reduced_chi = _data_v_sim(
+                data,
+                sim_stat,
+                # sim_error,
+                Nbins=bin,
+            )
+            if iteration == 0:
+                g10_chi.append(reduced_chi)
+            elif iteration == 1:
+                c11_chi.append(reduced_chi)
+            elif iteration == 2:
+                m11_chi.append(reduced_chi)
+            elif iteration == 3:
+                bs21_chi.append(reduced_chi)
+            else:
+                raise RuntimeError("IDK, something failed.")
+        iteration += 1
+    # print as a vertical table so it can be added to the latex table.
+    print("## Reduced chi-square")
+    print("g10")
+    for i in g10_chi:
+        print(format(i, ".3f"))
+    print("c11")
+    for i in c11_chi:
+        print(format(i, ".3f"))
+    print("m11")
+    for i in m11_chi:
+        print(format(i, ".3f"))
+    print("bs21")
+    for i in bs21_chi:
+        print(format(i, ".3f"))
+
+    bs21_m11_chi = []
+    for bin in bins:
+        # define bins on data, not on sims.
+        _, _, _, data_edges, _ = bin_dataset(data, x_col, y_col, bins=bin)
+        # get median values of the sims, pass this to _data_v_sim.
+        _, _, sim_stat, _, _ = bin_dataset(sim, x_col, y_col, bins=data_edges)
+        # Keep uncertainties fixed and not floating between data sets.
+        # _, _, _, _, sim_error = bin_dataset(bs21, x_col, y_col, bins=data_edges)
+
+        reduced_chi = _data_v_sim(
+            data,
+            sim_stat,
+            # sim_error,
+            Nbins=bin,
+        )
+        bs21_m11_chi.append(reduced_chi)
+    print("bs21 vs m11")
+    for i in bs21_m11_chi:
+        print(format(i, ".3f"))
+
+    delta_c = (data["c"].max() - data["c"].min()) / bins
+
+    # _, ax = new_figure()
+    # ax.plot(bins, bs21, label="P22")
+    # ax.plot(bins, m11, ":", label="M11")
+    # ax.plot(bins, c11, ".-", label="C11")
+    # ax.plot(bins, g10, "--", label="G10")
+    # ax.set_xlabel("bins")
+    # ax.set_ylabel(r"$\chi^2_{\nu}$")
+    # ax.legend()
+    # sns.despine()
+    # save_plot("chi2_bins.pdf")
 
     _, ax = new_figure()
 
-    ax.plot(bins, bs21, label="P22")
-    ax.plot(bins, m11, ":", label="M11")
-    ax.plot(bins, c11, ".-", label="C11")
-    ax.plot(bins, g10, "--", label="G10")
-    ax.set_xlabel("bins")
-    ax.set_ylabel(r"$\chi^2_{\nu}$")
-    ax.legend()
-    sns.despine()
-
-    save_plot("chi2_bins.pdf")
-
-    _, ax = new_figure()
-
-    ax.plot(delta_c, bs21, label="P22")
-    ax.plot(delta_c, m11, ":", label="M11")
-    ax.plot(delta_c, c11, "-.", label="C11")
-    ax.plot(delta_c, g10, "--", label="G10")
+    ax.plot(delta_c, bs21_chi, label="P22")
+    ax.plot(delta_c, m11_chi, ":", label="M11")
+    ax.plot(delta_c, c11_chi, "-.", label="C11")
+    ax.plot(delta_c, g10_chi, "--", label="G10")
+    # ax.set_title(f"c > {data['c'].min():.2f}")
     ax.invert_xaxis()
-    ax.set_ylim(0.0, 2.1)
+    # ax.set_ylim(0.0, 2.1)
     ax.set_xlabel(r"$c$ bin width")
     ax.set_ylabel(r"$\chi^2_{\nu}$")
     ax.legend()
     sns.despine()
 
-    save_plot("chi2_c.pdf")
+    save_plot("chi2_c_width.pdf")
+
+
+def chi_color_min(data, g10, c11, m11, bs21, min=True):
+    x_col, y_col = "c", "x1_standardized"
+    bin_spacing = 0.1  # matchs 20 bins over the full c-range of the data
+    # color_mins = np.array([-0.3, 0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 1.7])
+    color_mins = np.array([-0.3, 0.3, 1.7])
+    # color_mins = np.array([0.7, 1.7])
+    min = False
+
+    g10_chi = []
+    c11_chi = []
+    m11_chi = []
+    bs21_chi = []
+    iteration = 0
+    for sim in [g10, c11, m11, bs21]:
+        # for sim in [c11]:
+        for i, c_min in enumerate(color_mins[:-1]):
+            if min:
+                c_max = data["c"].max()
+            else:
+                c_max = color_mins[i + 1]
+            bin = round((c_max - c_min) / bin_spacing)
+            print(f"{iteration}: {c_min=} {c_max=} {bin=}")
+            # define bins on data, not on sims.
+            _, _, _, data_edges, _ = bin_dataset(
+                data[np.logical_and(c_min < data[x_col], data[x_col] < c_max)],
+                x_col,
+                y_col,
+                bins=bin,
+            )
+            # get median values of the sims, pass this to _data_v_sim.
+            _, _, sim_stat, _, _ = bin_dataset(
+                sim[np.logical_and(c_min < sim[x_col], sim[x_col] < c_max)],
+                x_col,
+                y_col,
+                bins=data_edges,
+            )
+
+            reduced_chi = _data_v_sim(
+                data[np.logical_and(c_min < data[x_col], data[x_col] < c_max)],
+                sim_stat,
+                Nbins=bin,
+                # reduced=False,
+            )
+            if iteration == 0:
+                g10_chi.append(reduced_chi)
+            elif iteration == 1:
+                c11_chi.append(reduced_chi)
+            elif iteration == 2:
+                m11_chi.append(reduced_chi)
+            elif iteration == 3:
+                bs21_chi.append(reduced_chi)
+            else:
+                raise RuntimeError("IDK, something failed.")
+        iteration += 1
+    # print as a vertical table so it can be added to the latex table.
+    print("## Reduced chi-square")
+    print("color min | g10")
+    for i, chi in enumerate(g10_chi):
+        print(color_mins[i], " | ", format(chi, ".3f"))
+    print("color min | c11")
+    for i, chi in enumerate(c11_chi):
+        print(color_mins[i], " | ", format(chi, ".3f"))
+    print("color min | m11")
+    for i, chi in enumerate(m11_chi):
+        print(color_mins[i], " | ", format(chi, ".3f"))
+    print("color min | bs21")
+    for i, chi in enumerate(bs21_chi):
+        print(color_mins[i], " | ", format(chi, ".3f"))
+
+    _, ax = new_figure()
+
+    if min:
+        ax.plot(color_mins[:-1], bs21_chi, label="P22")
+        ax.plot(color_mins[:-1], m11_chi, ":", label="M11")
+        ax.plot(color_mins[:-1], c11_chi, "-.", label="C11")
+        ax.plot(color_mins[:-1], g10_chi, "--", label="G10")
+        ax.set_xlabel(r"$c$ Minimum")
+    else:
+        x_error = []
+        for i in range(len(color_mins) - 1):
+            x_error.append(
+                (color_mins[i] + color_mins[i + 1]) / 2 - color_mins[i],
+            )
+        ax.errorbar(
+            (color_mins[:-1] + color_mins[1:]) / 2,
+            c11_chi,
+            xerr=x_error,
+            fmt="^",
+            label="C11",
+        )
+        ax.errorbar(
+            (color_mins[:-1] + color_mins[1:]) / 2,
+            g10_chi,
+            xerr=x_error,
+            fmt="o",
+            label="G10",
+        )
+        ax.errorbar(
+            (color_mins[:-1] + color_mins[1:]) / 2,
+            m11_chi,
+            xerr=x_error,
+            fmt="x",
+            label="M11",
+        )
+        ax.errorbar(
+            (color_mins[:-1] + color_mins[1:]) / 2,
+            bs21_chi,
+            xerr=x_error,
+            fmt=".",
+            label="P22",
+        )
+        ax.set_xlabel(r"$c$")
+    ax.set_ylabel(r"$\chi^2_{\nu}$")
+    ax.legend(loc="lower right")
+    sns.despine()
+
+    if min:
+        save_plot("chi2_c_min.pdf")
+    else:
+        save_plot("chi2_c_binned.pdf")

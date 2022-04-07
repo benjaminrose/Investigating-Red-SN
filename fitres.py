@@ -318,7 +318,7 @@ class Fitres:
 
         ax = sns.histplot(
             data=sub_set1,
-            label=r"c $<=$" + f"{self.c_split}",
+            label=r"c $\leq$" + f"{self.c_split}",
             x=key,
             color="b",
             **keywords,
@@ -332,6 +332,12 @@ class Fitres:
             ls="--",
             **keywords,
         )
+        if key == "x1":
+            ax.set_xlabel(r"$x_1$")
+        elif key == "HOST_LOGMASS":
+            ax.set_xlabel(r"$\log(M_{*}/M_{\odot})$")
+        elif key == "zHD":
+            ax.set_xlabel("Redshift")
         ax.legend()
 
         if key == "zHD":

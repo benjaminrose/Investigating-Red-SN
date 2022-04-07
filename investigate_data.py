@@ -17,6 +17,7 @@ from figures import (
     posterior_corner,
     chi2_bin,
     plot_rms_c,
+    chi_color_min,
 )
 from model_fitting import (
     rv_full_range,
@@ -90,6 +91,42 @@ if __name__ == "__main__":
     )
     data.clean_data(x1err_max, x1_max, cerr_max, c_min, deduplicate=True)
     data.calc_HR()
+
+    HST = False
+    if HST:
+        # Y(F105W) at z=0.05
+        data.data.loc[
+            np.logical_and(0.035 < data.data["zHD"], data.data["zHD"] < 0.07),
+            [
+                "IDSURVEY",
+                "zHD",
+                "RA",
+                "DEC",
+                "HOST_LOGMASS",
+                "HOSTGAL_SFR",
+                "HOST_sSFR",
+                "HOST_RA",
+                "HOST_DEC",
+            ],
+        ].sort_values(["DEC", "RA", "zHD"]).to_csv("z0.05_hosts.csv", na_rep="-999")
+        # J(F125W) at z=0.2
+        data.data.loc[
+            np.logical_and(0.18 < data.data["zHD"], data.data["zHD"] < 0.22),
+            [
+                "IDSURVEY",
+                "zHD",
+                "RA",
+                "DEC",
+                "HOST_LOGMASS",
+                "HOSTGAL_SFR",
+                "HOST_sSFR",
+                "HOST_RA",
+                "HOST_DEC",
+            ],
+        ].sort_values(["DEC", "RA", "zHD"]).to_csv("z0.2_hosts.csv", na_rep="-999")
+        import sys
+
+        sys.exit()
 
     # Import sim data
     ####
@@ -235,7 +272,6 @@ if __name__ == "__main__":
         ],
         FAST,
     )
-    # print(f'beta_pymc3 = {fitted.posterior["c"].mean(dim=("chain", "draw"))}')  # for bambi
     print("Medians:", fitted.posterior.median())
     print("StD:", fitted.posterior.std())
     print(
@@ -253,18 +289,16 @@ if __name__ == "__main__":
         + Style.RESET_ALL
     )
     if not FAST:
-        bhm_diagnostic_plots(
-            fitted,
-            var_names=[
-                "M_0",
-                "Δ_θ",
-                "θ",
-                "μ_c",
-                "σ_c",
-                "α_c",
-                "σ",
-            ],
-        )
+        var_names = [
+            "M_0",
+            "Δ_θ",
+            "θ",
+            "μ_c",
+            "σ_c",
+            "α_c",
+            "σ",
+        ]
+        bhm_diagnostic_plots(fitted, var_names=var_names)
     if ALL:
         delta_rv_fit_freq = rv_broken_linear_frequentist(data, fit_mask)
         print(
@@ -432,4 +466,13 @@ if __name__ == "__main__":
             },
         )
 
-    chi2_bin()
+        # chi2_bin(
+        #     data.data.loc[data.data["c"] > 0.2],
+        #     G10.data.loc[G10.data["c"] > 0.2],
+        #     C11.data.loc[C11.data["c"] > 0.2],
+        #     M11.data.loc[M11.data["c"] > 0.2],
+        #     BS21.data.loc[BS21.data["c"] > 0.2],
+        # )
+        chi2_bin(data.data, G10.data, C11.data, M11.data, BS21.data)
+
+    chi_color_min(data.data, G10.data, C11.data, M11.data, BS21.data)

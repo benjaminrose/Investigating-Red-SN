@@ -50,8 +50,8 @@ def rv_broken_linear_bayesian(data, fast=False):
     uses the more common notational practice of using the variance scale parameter.
     """
     if fast:
-        PYMC_TUNE = 100
-        PYMC_DRAWS = 100
+        PYMC_TUNE = 50
+        PYMC_DRAWS = 50
         PYMC_CHAINS = 2
     else:
         PYMC_TUNE = 10000
@@ -111,7 +111,13 @@ def rv_broken_linear_bayesian(data, fast=False):
         graph = pm.model_to_graphviz(model)
         graph.render(filename="figures/model", format="pdf")
         # Sample model
-        trace = pm.sample(PYMC_DRAWS, chains=PYMC_CHAINS, tune=PYMC_TUNE)
+        # using the old style. In v4.0, this defaults ot returning an arviz.InferenceData object.
+        trace = pm.sample(
+            PYMC_DRAWS,
+            chains=PYMC_CHAINS,
+            tune=PYMC_TUNE,
+            return_inferencedata=False,
+        )
         prior = pm.sample_prior_predictive()
         posterior_predictive = pm.sample_posterior_predictive(trace)
         pm_data = az.from_pymc3(
