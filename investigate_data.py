@@ -290,7 +290,7 @@ if __name__ == "__main__":
     )
     if not FAST:
         var_names = [
-            "M_0",
+            "M'_0",
             "Δ_θ",
             "θ",
             "μ_c",
@@ -325,7 +325,7 @@ if __name__ == "__main__":
         posterior_corner(
             fitted.posterior,
             var_names=[
-                "M_0",
+                "M'_0",
                 "θ",
                 "Δ_θ",
                 "σ",

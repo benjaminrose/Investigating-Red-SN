@@ -205,7 +205,7 @@ def posterior_corner(posterior, var_names, filename=""):
         smooth=1.25,
         labelpad=0.2,
         labels=[
-            r"M$_0$",
+            r"M'$_0$",
             r"$\theta$",
             r"$\Delta_{\theta}$",
             r"$\sigma$",
@@ -241,7 +241,7 @@ def plot_rms_c(data, fit, c_max_fit, bins, filename="rms-c.pdf"):
         data["c"],
         fit["θ"].median().values,
         fit["Δ_θ"].median().values,
-        fit["M_0"].median().values,
+        fit["M'_0"].median().values,
     )
     if evenly_filled:
         bins = 34  # 17 bins is ~100 objects per bin
@@ -386,7 +386,7 @@ def _add_fit_broken_bayes(ax, fit, xs):
             xs,
             fit["θ"][i].values,
             fit["Δ_θ"][i].values,
-            fit["M_0"][i].values,
+            fit["M'_0"][i].values,
         )
         # if i == 0:
         #     # add one nearly blank line in the legned
@@ -399,7 +399,7 @@ def _add_fit_broken_bayes(ax, fit, xs):
         xs,
         fit["θ"].median().values,
         fit["Δ_θ"].median().values,
-        fit["M_0"].median().values,
+        fit["M'_0"].median().values,
     )
     ax.plot(
         xs,

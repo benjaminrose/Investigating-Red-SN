@@ -63,7 +63,7 @@ def rv_broken_linear_bayesian(data, fast=False):
         # Model Variables
         theta_cosmo = pm.Uniform("θ", lower=1.2, upper=1.3)
         delta_theta = pm.Normal("Δ_θ", mu=0, sigma=0.15)
-        M0 = pm.Uniform("M_0", lower=-19.4, upper=-19.2)
+        M0 = pm.Uniform("M'_0", lower=-19.4, upper=-19.2)
         sigma_int = pm.HalfCauchy(
             "σ", 0.05
         )  # variance of epsilon distribution in Kelly2007 eqn 1.
