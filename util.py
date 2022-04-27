@@ -3,6 +3,7 @@
 __version__ = "2021-09"
 
 from argparse import ArgumentParser, BooleanOptionalAction
+from collections import Counter
 
 from scipy.stats import binned_statistic
 from numpy import logical_and, isnan
@@ -30,7 +31,7 @@ def bin_dataset(data, x, y, bins=25, error_stat=robust_scatter):
     data_x_axis = data[x]
     data_y_axis = data[y]
 
-    data_stat, data_edges, _ = binned_statistic(
+    data_stat, data_edges, binnumber = binned_statistic(
         data_x_axis, data_y_axis, statistic="median", bins=bins
     )
     data_error, _, _ = binned_statistic(
@@ -53,7 +54,14 @@ def bin_dataset(data, x, y, bins=25, error_stat=robust_scatter):
             data_error[i] = data.loc[
                 in_bin, y + "_ERR"
             ].values  # assume this is "x1_standardized_ERR"
-    return data_x_axis, data_y_axis, data_stat, data_edges, data_error
+    return (
+        data_x_axis,
+        data_y_axis,
+        data_stat,
+        data_edges,
+        data_error,
+        Counter(binnumber),
+    )
 
 
 def parse_cli():

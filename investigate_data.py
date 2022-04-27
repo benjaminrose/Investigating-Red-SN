@@ -450,29 +450,23 @@ if __name__ == "__main__":
                 "ylim": [-14.5, -21.5],
             },
         )
-        plot_binned(
-            M11.data,
-            BS21.data,
-            x_col="c",
-            y_col="x1_standardized",
-            bins=BINS,
-            filename="color-luminosity-M11-BS21.pdf",
-            fig_options={
-                "data_name": "M11",
-                "sim_name": "P22",
-                "y_label": r"M$'$ (mag)",
-                "y_flip": True,
-                "ylim": [-14.5, -21.5],
-            },
-        )
+        if ALL:
+            plot_binned(
+                M11.data,
+                BS21.data,
+                x_col="c",
+                y_col="x1_standardized",
+                bins=BINS,
+                filename="color-luminosity-M11-BS21.pdf",
+                fig_options={
+                    "data_name": "M11",
+                    "sim_name": "P22",
+                    "y_label": r"M$'$ (mag)",
+                    "y_flip": True,
+                    "ylim": [-14.5, -21.5],
+                },
+            )
 
-        # chi2_bin(
-        #     data.data.loc[data.data["c"] > 0.2],
-        #     G10.data.loc[G10.data["c"] > 0.2],
-        #     C11.data.loc[C11.data["c"] > 0.2],
-        #     M11.data.loc[M11.data["c"] > 0.2],
-        #     BS21.data.loc[BS21.data["c"] > 0.2],
-        # )
-        chi2_bin(data.data, G10.data, C11.data, M11.data, BS21.data)
+            chi2_bin(data.data, G10.data, C11.data, M11.data, BS21.data)
 
     chi_color_min(data.data, G10.data, C11.data, M11.data, BS21.data)

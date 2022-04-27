@@ -73,11 +73,11 @@ def plot_binned(
     #         sim_high = sim.loc[sim["HOST_LOGMASS"] > 10]
     #         sim_low = sim.loc[sim["HOST_LOGMASS"] <= 10]
 
-    data_x, data_y, data_stat, data_edges, data_error = bin_dataset(
+    data_x, data_y, data_stat, data_edges, data_error, data_n = bin_dataset(
         data, x_col, y_col, bins=bins
     )
     if sim is not None:
-        sim_x, sim_y, sim_stat, sim_edges, sim_error = bin_dataset(
+        sim_x, sim_y, sim_stat, sim_edges, sim_error, sim_n = bin_dataset(
             sim, x_col, y_col, bins=data_edges
         )
 
@@ -121,6 +121,26 @@ def plot_binned(
         fmt=">",
         label="Binned " + fig_options.get("data_name", "Pantheon+"),
     )
+
+    if fig_options.get("data_name", "default") == "M11":
+        print("c,   m11_stat, m11_error, bs21_stat, bs21_error, diff, diff_error")
+        for c, m11_stat, m11_error, bs21_stat, bs21_error, i in zip(
+            (data_edges[:-1] + data_edges[1:]) / 2,
+            data_stat,
+            data_error,
+            sim_stat,
+            sim_error,
+            range(1, len(data_stat) + 1),  # bins will be 1 indexed
+        ):
+            print(
+                f"{c:.3f},",
+                f"{m11_stat:.3f},",
+                f"{m11_error/np.sqrt(data_n[i]):.3f},",
+                f"{bs21_stat:.3f},",
+                f"{bs21_error/np.sqrt(sim_n[i]):.3f},",
+                f"{m11_stat - bs21_stat:.3f},",
+                f"{np.sqrt((m11_error/np.sqrt(data_n[i])) ** 2 + (bs21_error/np.sqrt(sim_n[i])) ** 2):.4f}",
+            )
 
     if add_14J:
         ax.plot(1.163445, -17.843953, "b*", markersize=12, label="SN2014J")
@@ -577,17 +597,18 @@ def chi2_bin(data, g10, c11, m11, bs21):
         for bin in bins:
             print(iteration, bin)
             # define bins on data, not on sims.
-            _, _, _, data_edges, _ = bin_dataset(data, x_col, y_col, bins=bin)
+            _, _, _, data_edges, _, _ = bin_dataset(data, x_col, y_col, bins=bin)
             # get median values of the sims, pass this to _data_v_sim.
-            _, _, sim_stat, _, _ = bin_dataset(sim, x_col, y_col, bins=data_edges)
+            _, _, sim_stat, _, _, _ = bin_dataset(sim, x_col, y_col, bins=data_edges)
             # Keep uncertainties fixed and not floating between data sets.
-            # _, _, _, _, sim_error = bin_dataset(bs21, x_col, y_col, bins=data_edges)
+            # _, _, _, _, sim_error, _ = bin_dataset(bs21, x_col, y_col, bins=data_edges)
 
             reduced_chi = _data_v_sim(
                 data,
                 sim_stat,
                 # sim_error,
                 Nbins=bin,
+                reduced=False,
             )
             if iteration == 0:
                 g10_chi.append(reduced_chi)
@@ -601,7 +622,7 @@ def chi2_bin(data, g10, c11, m11, bs21):
                 raise RuntimeError("IDK, something failed.")
         iteration += 1
     # print as a vertical table so it can be added to the latex table.
-    print("## Reduced chi-square")
+    print("## Chi-square")
     print("g10")
     for i in g10_chi:
         print(format(i, ".3f"))
@@ -618,11 +639,11 @@ def chi2_bin(data, g10, c11, m11, bs21):
     bs21_m11_chi = []
     for bin in bins:
         # define bins on data, not on sims.
-        _, _, _, data_edges, _ = bin_dataset(data, x_col, y_col, bins=bin)
+        _, _, _, data_edges, _, _ = bin_dataset(data, x_col, y_col, bins=bin)
         # get median values of the sims, pass this to _data_v_sim.
-        _, _, sim_stat, _, _ = bin_dataset(sim, x_col, y_col, bins=data_edges)
+        _, _, sim_stat, _, _, _ = bin_dataset(sim, x_col, y_col, bins=data_edges)
         # Keep uncertainties fixed and not floating between data sets.
-        # _, _, _, _, sim_error = bin_dataset(bs21, x_col, y_col, bins=data_edges)
+        # _, _, _, _, sim_error, _ = bin_dataset(bs21, x_col, y_col, bins=data_edges)
 
         reduced_chi = _data_v_sim(
             data,
@@ -667,10 +688,8 @@ def chi2_bin(data, g10, c11, m11, bs21):
 
 def chi_color_min(data, g10, c11, m11, bs21, min=True):
     x_col, y_col = "c", "x1_standardized"
-    bin_spacing = 0.1  # matchs 20 bins over the full c-range of the data
-    # color_mins = np.array([-0.3, 0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 1.7])
+    bin_spacing = 0.1  # matches 20 bins over the full c-range of the data
     color_mins = np.array([-0.3, 0.3, 1.7])
-    # color_mins = np.array([0.7, 1.7])
     min = False
 
     g10_chi = []
@@ -679,7 +698,6 @@ def chi_color_min(data, g10, c11, m11, bs21, min=True):
     bs21_chi = []
     iteration = 0
     for sim in [g10, c11, m11, bs21]:
-        # for sim in [c11]:
         for i, c_min in enumerate(color_mins[:-1]):
             if min:
                 c_max = data["c"].max()
@@ -688,14 +706,14 @@ def chi_color_min(data, g10, c11, m11, bs21, min=True):
             bin = round((c_max - c_min) / bin_spacing)
             print(f"{iteration}: {c_min=} {c_max=} {bin=}")
             # define bins on data, not on sims.
-            _, _, _, data_edges, _ = bin_dataset(
+            _, _, _, data_edges, _, _ = bin_dataset(
                 data[np.logical_and(c_min < data[x_col], data[x_col] < c_max)],
                 x_col,
                 y_col,
                 bins=bin,
             )
             # get median values of the sims, pass this to _data_v_sim.
-            _, _, sim_stat, _, _ = bin_dataset(
+            _, _, sim_stat, _, _, _ = bin_dataset(
                 sim[np.logical_and(c_min < sim[x_col], sim[x_col] < c_max)],
                 x_col,
                 y_col,
@@ -706,7 +724,7 @@ def chi_color_min(data, g10, c11, m11, bs21, min=True):
                 data[np.logical_and(c_min < data[x_col], data[x_col] < c_max)],
                 sim_stat,
                 Nbins=bin,
-                # reduced=False,
+                reduced=False,
             )
             if iteration == 0:
                 g10_chi.append(reduced_chi)
@@ -732,6 +750,41 @@ def chi_color_min(data, g10, c11, m11, bs21, min=True):
         print(color_mins[i], " | ", format(chi, ".3f"))
     print("color min | bs21")
     for i, chi in enumerate(bs21_chi):
+        print(color_mins[i], " | ", format(chi, ".3f"))
+
+    bs21m11_chi = []
+    for sim in [m11]:
+        for i, c_min in enumerate(color_mins[:-1]):
+            if min:
+                c_max = bs21["c"].max()
+            else:
+                c_max = color_mins[i + 1]
+            bin = round((c_max - c_min) / bin_spacing)
+            print(f"{iteration}: {c_min=} {c_max=} {bin=}")
+            # define bins on data, not on sims.
+            _, _, _, data_edges, _, _ = bin_dataset(
+                bs21[np.logical_and(c_min < bs21[x_col], bs21[x_col] < c_max)],
+                x_col,
+                y_col,
+                bins=bin,
+            )
+            # get median values of the sims, pass this to _data_v_sim.
+            _, _, sim_stat, _, _, _ = bin_dataset(
+                sim[np.logical_and(c_min < sim[x_col], sim[x_col] < c_max)],
+                x_col,
+                y_col,
+                bins=data_edges,
+            )
+
+            reduced_chi = _data_v_sim(
+                bs21[np.logical_and(c_min < bs21[x_col], bs21[x_col] < c_max)],
+                sim_stat,
+                Nbins=bin,
+                reduced=False,
+            )
+            bs21m11_chi.append(reduced_chi)
+    print("color min | m11 v bs21")
+    for i, chi in enumerate(bs21m11_chi):
         print(color_mins[i], " | ", format(chi, ".3f"))
 
     _, ax = new_figure()
