@@ -1,8 +1,9 @@
 """Module containing my figure creating functions
 """
 from collections import Counter
-from pickle import TRUE
-from pkgutil import extend_path
+
+# from pickle import TRUE
+# from pkgutil import extend_path
 
 import seaborn as sns
 from matplotlib.pyplot import savefig
@@ -177,21 +178,6 @@ def plot_binned(
 
     save_plot(filename)
 
-    # if sim is not None:
-    #     _data_v_sim(
-    #         data_x,
-    #         data_y,
-    #         data_stat,
-    #         data_error,
-    #         sim_x,
-    #         sim_y,
-    #         sim_stat,
-    #         sim_error,
-    #         bins,
-    #         filename,
-    #         fig_options,
-    #     )
-
 
 def posterior_corner(posterior, var_names, filename=""):
     _, ax = new_figure()
@@ -214,7 +200,7 @@ def posterior_corner(posterior, var_names, filename=""):
             r"$\alpha_c$",
         ],
     )
-    savefig(
+    save_plot(
         "figures/" + filename, bbox_inches="tight"
     )  # removed bbox_inches="tight" from save_plot()
 
@@ -447,8 +433,10 @@ def _data_v_sim(
     data,
     sim_stat,
     # sim_error,
+    data_edges,
     Nbins,
     reduced=True,
+    name="",
 ):
     """
     data_, sim_: pandas.Series
@@ -459,16 +447,36 @@ def _data_v_sim(
         Reduced Chi^2 value between `data` and `sim`.
     """
 
-    # NEW chi-squared method.
+    # NEW 3/1 chi-squared method.
     # add a column that states the c-bin number. Use that number to pull from the binned sim_stat
-    data["c_bins"] = pd.cut(data["c"], Nbins, labels=range(Nbins))
-    theory_y_values = []
-    theory_error = []
-    for i in data["c_bins"].values:
-        theory_y_values.append(sim_stat[i])
-        # theory_error.append(sim_error[i])
-    theory_y_values = np.array(theory_y_values)
-    # theory_error = np.array(theory_error)
+    # data["c_bins"] = pd.cut(data["c"], Nbins, labels=range(Nbins))
+    # theory_y_values = []
+    # theory_error = []
+    # for i in data["c_bins"].values:
+    #     theory_y_values.append(sim_stat[i])
+    #     # theory_error.append(sim_error[i])
+    # theory_y_values = np.array(theory_y_values)
+    # theory_error = np.array(theory_error)   # Oldest method.
+    # NEW 4/29 chi-square method.
+    kr_bins = KernelReg(
+        sim_stat[
+            ~np.isnan(sim_stat)
+        ],  # KernelReg can not take nan values, or the whole KR is nan.
+        ((data_edges[:-1] + data_edges[1:]) / 2)[~np.isnan(sim_stat)],
+        "c",
+    )
+    theory_y_values = kr_bins.fit(data["c"])[0]
+
+    _, ax = new_figure()
+    xs = np.linspace(
+        (data_edges[0] + data_edges[1]) / 2,
+        (data_edges[-2] + data_edges[-1]) / 2,
+        100,
+    )
+    kr_dict[name] = kr_bins.fit(xs)[0]
+    ax.plot(xs, kr_bins.fit(xs)[0], label="Polynomial Fit")
+    ax.plot(data["c"], data["x1_standardized"], ".")
+    save_plot(f"del_kr_bins_{name}{data_edges[0]}.pdf")
 
     chi_numerator = (data["x1_standardized"].values - theory_y_values) ** 2
     # chi_denominator = _rms(data["c"]) ** 2
@@ -607,6 +615,7 @@ def chi2_bin(data, g10, c11, m11, bs21):
                 data,
                 sim_stat,
                 # sim_error,
+                data_edges,
                 Nbins=bin,
                 reduced=False,
             )
@@ -622,7 +631,7 @@ def chi2_bin(data, g10, c11, m11, bs21):
                 raise RuntimeError("IDK, something failed.")
         iteration += 1
     # print as a vertical table so it can be added to the latex table.
-    print("## Chi-square")
+    print("## Reduced Chi-square")
     print("g10")
     for i in g10_chi:
         print(format(i, ".3f"))
@@ -649,6 +658,7 @@ def chi2_bin(data, g10, c11, m11, bs21):
             data,
             sim_stat,
             # sim_error,
+            data_edges,
             Nbins=bin,
         )
         bs21_m11_chi.append(reduced_chi)
@@ -686,6 +696,9 @@ def chi2_bin(data, g10, c11, m11, bs21):
     save_plot("chi2_c_width.pdf")
 
 
+kr_dict = {}
+
+
 def chi_color_min(data, g10, c11, m11, bs21, min=True):
     x_col, y_col = "c", "x1_standardized"
     bin_spacing = 0.1  # matches 20 bins over the full c-range of the data
@@ -697,14 +710,14 @@ def chi_color_min(data, g10, c11, m11, bs21, min=True):
     m11_chi = []
     bs21_chi = []
     iteration = 0
-    for sim in [g10, c11, m11, bs21]:
+    for sim, name in zip([g10, c11, m11, bs21], ["g10", "c11", "m11", "bs21"]):
         for i, c_min in enumerate(color_mins[:-1]):
             if min:
                 c_max = data["c"].max()
             else:
                 c_max = color_mins[i + 1]
             bin = round((c_max - c_min) / bin_spacing)
-            print(f"{iteration}: {c_min=} {c_max=} {bin=}")
+            # print(f"{iteration}: {c_min=} {c_max=} {bin=}")
             # define bins on data, not on sims.
             _, _, _, data_edges, _, _ = bin_dataset(
                 data[np.logical_and(c_min < data[x_col], data[x_col] < c_max)],
@@ -723,8 +736,10 @@ def chi_color_min(data, g10, c11, m11, bs21, min=True):
             reduced_chi = _data_v_sim(
                 data[np.logical_and(c_min < data[x_col], data[x_col] < c_max)],
                 sim_stat,
+                data_edges,
                 Nbins=bin,
                 reduced=False,
+                name=name,
             )
             if iteration == 0:
                 g10_chi.append(reduced_chi)
@@ -737,8 +752,26 @@ def chi_color_min(data, g10, c11, m11, bs21, min=True):
             else:
                 raise RuntimeError("IDK, something failed.")
         iteration += 1
+
+    _, ax = new_figure()
+    xs = np.linspace(0.3, 1.6, 100)
+    ax.plot(xs, kr_dict["bs21"], label="bs21")
+    ax.plot(xs, kr_dict["m11"], label="m11")
+    ax.plot(xs, kr_dict["c11"], label="c11")
+    ax.plot(xs, kr_dict["g10"], label="g10")
+    ax.plot(
+        data.loc[np.logical_and(0.3 < data["c"], data["c"] < 2), "c"],
+        data.loc[
+            np.logical_and(0.3 < data["c"], data["c"] < 2),
+            "x1_standardized",
+        ],
+        ".",
+    )
+    ax.legend()
+    save_plot(f"del_kr_bins_all.pdf")
+
     # print as a vertical table so it can be added to the latex table.
-    print("## Reduced chi-square")
+    print("## Chi-square")
     print("color min | g10")
     for i, chi in enumerate(g10_chi):
         print(color_mins[i], " | ", format(chi, ".3f"))
@@ -779,6 +812,7 @@ def chi_color_min(data, g10, c11, m11, bs21, min=True):
             reduced_chi = _data_v_sim(
                 bs21[np.logical_and(c_min < bs21[x_col], bs21[x_col] < c_max)],
                 sim_stat,
+                data_edges,
                 Nbins=bin,
                 reduced=False,
             )

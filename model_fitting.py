@@ -5,7 +5,6 @@ from colorama import Fore, Style
 import numpy as np
 from numpy.polynomial import Polynomial
 import linmix
-import bambi
 import pymc3 as pm
 import arviz as az
 from theano import tensor as tt
