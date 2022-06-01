@@ -38,6 +38,8 @@ def plot_binned(
     # split_mass=False,
     filename="",
     fig_options={},
+    model_krs=None,
+    scatter=None,
     add_14J=False,
 ):
     """plot binned values of data.
@@ -64,8 +66,13 @@ def plot_binned(
         File name to use when saving figure. If left as the empty string,
         figure is shown but not saved.
     fig_options : dict
-        Contrains user overrides to be used in figure creation. Keys are
+        Contains user overrides to be used in figure creation. Keys are
         "sim_name", "data_name", "x_label", "y_label", "y_flip", "y_lim", "leg_loc".
+    model_krs : dict
+        Dictionary with keys ["g10", "c11", "m11", "bs21"] holding `KernelReg` of each
+        simulation's median M` as a function of color.
+    scatter : function
+        A kernel regression  of the Hubble RMS as a function of color for the data.
     """
     # if split_mass:
     #     data_high = data.loc[data["HOST_LOGMASS"] > 10]
@@ -74,15 +81,24 @@ def plot_binned(
     #         sim_high = sim.loc[sim["HOST_LOGMASS"] > 10]
     #         sim_low = sim.loc[sim["HOST_LOGMASS"] <= 10]
 
-    data_x, data_y, data_stat, data_edges, data_error, data_n = bin_dataset(
+    # plot rms/sqrt(n) rather than date_error
+    data_x, data_y, data_stat, data_edges, _, data_n_counter = bin_dataset(
         data, x_col, y_col, bins=bins
     )
+
+    # convert data_n from counter/dictionary to list with indexes matching the bin number
+    data_n = []
+    for i in range(1, bins + 1):
+        data_n.append(data_n_counter.get(i, 0))
+
     if sim is not None:
         sim_x, sim_y, sim_stat, sim_edges, sim_error, sim_n = bin_dataset(
             sim, x_col, y_col, bins=data_edges
         )
 
-    _, ax = new_figure()
+    _, ax = new_figure(
+        figsize=(6.4, 6.0)
+    )  # figsize defaults to (width, hight) = (6.4, 4.8)
 
     if show_data:
         if sim is not None:
@@ -117,7 +133,7 @@ def plot_binned(
     ax.errorbar(
         (data_edges[:-1] + data_edges[1:]) / 2,
         data_stat,
-        yerr=data_error,
+        yerr=scatter.fit((data_edges[:-1] + data_edges[1:]) / 2)[0] / np.sqrt(data_n),
         color="tab:orange",
         fmt=">",
         label="Binned " + fig_options.get("data_name", "Pantheon+"),
@@ -145,6 +161,14 @@ def plot_binned(
 
     if add_14J:
         ax.plot(1.163445, -17.843953, "b*", markersize=12, label="SN2014J")
+
+    if model_krs is not None:
+        xs = np.linspace(data_x.min(), data_x.max(), 100)
+        lables = ["G10", "C11", "M11", "P22"]
+        # https://matplotlib.org/stable/gallery/lines_bars_and_markers/linestyles.html
+        line_styles = ["dotted", "dashed", "dashdot", (0, (3, 5, 1, 5, 1, 5))]
+        for key, label, ls in zip(model_krs.keys(), lables, line_styles):
+            ax.plot(xs, model_krs[key].fit(xs)[0], linestyle=ls, label=label)
 
     if fit is not None:
         _add_fit(ax, data_x, fit, c_max_fit)
@@ -273,7 +297,7 @@ def plot_rms_c(data, fit, c_max_fit, bins, filename="rms-c.pdf"):
             (data_edges[-2] + data_edges[-1]) / 2,
             100,
         )
-        ax.plot(xs, kr.fit(xs)[0], label="Polynomial Fit")
+        ax.plot(xs, kr.fit(xs)[0])
 
     else:
         counted = Counter(binnumber)
@@ -301,6 +325,8 @@ def plot_rms_c(data, fit, c_max_fit, bins, filename="rms-c.pdf"):
     sns.despine()
 
     save_plot(filename)
+
+    return kr
 
 
 def _add_fit_linmix(ax, fit, xs):

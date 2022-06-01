@@ -281,6 +281,7 @@ class Fitres:
             bins="auto",
             element="step",
             fill=False,
+            label="Pantheon+",
         )
         if key == "c":
             sns.rugplot(
@@ -293,13 +294,43 @@ class Fitres:
             )
             ax.fill(
                 [-0.3, -0.3, 0.3, 0.3],
-                [180, -10, -10, 180],
+                [190, -10, -10, 190],
                 facecolor="black",
                 edgecolor="none",
                 alpha=0.1,
             )
-            ax.set_ylim(0, 174)
+            ax.set_ylim(0, 185)
             sns.despine()
+        if len(filename) > 0:
+            save_plot(filename)
+        else:
+            return ax
+
+    def plot_hist_plus(self, key, extra_data, filename=""):
+        ax = self.plot_hist(key)
+
+        # TODO: Don't hard code like this.
+        labels = ["G10", "C11", "M11", "P22"]
+        # https://matplotlib.org/stable/gallery/lines_bars_and_markers/linestyles.html
+        line_styles = ["dotted", "dashed", "dashdot", (0, (3, 5, 1, 5, 1, 5))]
+        for data, label, ls in zip(extra_data, labels, line_styles):
+            ax = sns.histplot(
+                # downsample non-duplicated sims to match self.data
+                data=data[~data.index.duplicated(keep="first")].sample(len(self.data)),
+                x=key,
+                cumulative=False,
+                bins="auto",
+                element="step",
+                fill=False,
+                # stat="density",
+                common_norm=True,
+                label=label,
+                zorder=1.5,  # move below data line that is at zorder=2.
+                linestyle=ls,
+                alpha=0.8,
+            )
+        ax.legend()
+
         save_plot(filename)
 
     def plot_hists(self, key="FITPROB", filename=""):

@@ -25,7 +25,7 @@ from model_fitting import (
     rv_broken_linear_bayesian,
     rv_broken_linear_frequentist,
 )
-from util import parse_cli
+from util import parse_cli, calc_chi2, kr_sims
 import broken_linear
 
 
@@ -320,8 +320,9 @@ if __name__ == "__main__":
         if ALL:
             data.plot_fitprob_binned_c()
 
-        data.plot_hist("c", f"c_dist.pdf")
+    data.plot_hist_plus("c", [G10.data, C11.data, M11.data, BS21.data], f"c_dist.pdf")
 
+    if not FAST:
         posterior_corner(
             fitted.posterior,
             var_names=[
@@ -336,41 +337,43 @@ if __name__ == "__main__":
             filename="corner.pdf",
         )
 
+    scatter_sims = kr_sims(G10.data, C11.data, M11.data, BS21.data)
+
     print("## Data vs Sims\n")
+    if ALL:
+        plot_binned(
+            data.data.loc[data.data["HOST_LOGMASS"] > 10],
+            BS21.data.loc[BS21.data["HOST_LOGMASS"] > 10],
+            x_col="c",
+            y_col="x1_standardized",
+            bins=BINS,
+            filename="color-luminosity-high_mass.png",
+            fig_options={
+                "data_name": "High Mass Hosts",
+                "sim_name": "BS21",
+                # TODO: define this elsewhere rather than copy and paste.
+                # "y_label": "mB - mu(z) - 0.15 * x1",
+                "y_label": r"M$'$ (mag)",
+                "y_flip": True,
+                "ylim": [-14.5, -21.5],
+            },
+        )
+        plot_binned(
+            data.data.loc[data.data["HOST_LOGMASS"] <= 10],
+            BS21.data.loc[BS21.data["HOST_LOGMASS"] <= 10],
+            x_col="c",
+            y_col="x1_standardized",
+            bins=BINS,
+            filename="color-luminosity-low_mass.png",
+            fig_options={
+                "data_name": "Low Mass Hosts",
+                "sim_name": "P22",
+                "y_label": r"M$'$ (mag)",
+                "y_flip": True,
+                "ylim": [-14.5, -21.5],
+            },
+        )
     if not FAST:
-        if ALL:
-            plot_binned(
-                data.data.loc[data.data["HOST_LOGMASS"] > 10],
-                BS21.data.loc[BS21.data["HOST_LOGMASS"] > 10],
-                x_col="c",
-                y_col="x1_standardized",
-                bins=BINS,
-                filename="color-luminosity-high_mass.png",
-                fig_options={
-                    "data_name": "High Mass Hosts",
-                    "sim_name": "BS21",
-                    # TODO: define this elsewhere rather than copy and paste.
-                    # "y_label": "mB - mu(z) - 0.15 * x1",
-                    "y_label": r"M$'$ (mag)",
-                    "y_flip": True,
-                    "ylim": [-14.5, -21.5],
-                },
-            )
-            plot_binned(
-                data.data.loc[data.data["HOST_LOGMASS"] <= 10],
-                BS21.data.loc[BS21.data["HOST_LOGMASS"] <= 10],
-                x_col="c",
-                y_col="x1_standardized",
-                bins=BINS,
-                filename="color-luminosity-low_mass.png",
-                fig_options={
-                    "data_name": "Low Mass Hosts",
-                    "sim_name": "P22",
-                    "y_label": r"M$'$ (mag)",
-                    "y_flip": True,
-                    "ylim": [-14.5, -21.5],
-                },
-            )
         plot_binned(
             data.data,
             # BS21.data,
@@ -384,7 +387,7 @@ if __name__ == "__main__":
                 "ylim": [6.5, 13.5],
             },
         )
-    plot_rms_c(
+    scatter_data = plot_rms_c(
         data.data,
         fit=fitted.posterior.stack(draws=("chain", "draw")),
         c_max_fit=C_MAX_FIT,
@@ -392,22 +395,24 @@ if __name__ == "__main__":
     )
     plot_binned(
         data.data,
-        BS21.data,
-        "c",
-        "x1_standardized",
+        # BS21.data,
+        x_col="c",
+        y_col="x1_standardized",
         fit=fitted.posterior.stack(draws=("chain", "draw")),
         c_max_fit=C_MAX_FIT,
         bins=BINS,
+        model_krs=scatter_sims,
+        scatter=scatter_data,
         add_14J=True,
         filename="color-luminosity-BS21.pdf",
         fig_options={
             "sim_name": "P22",
             "y_label": r"M$'$ (mag)",
             "y_flip": True,
-            "ylim": [-14.5, -23],  # [-14.5, -21.5] elsewhere
+            "ylim": [-14.5, -22.5],  # [-14.5, -21.5] elsewhere
         },
     )
-    if not FAST:
+    if ALL:
         plot_binned(
             data.data,
             G10.data,
@@ -465,7 +470,40 @@ if __name__ == "__main__":
                 "ylim": [-14.5, -21.5],
             },
         )
-        if ALL:
-            chi2_bin(data.data, G10.data, C11.data, M11.data, BS21.data)
+        chi2_bin(data.data, G10.data, C11.data, M11.data, BS21.data)
+        chi_color_min(data.data, G10.data, C11.data, M11.data, BS21.data)
 
-    chi_color_min(data.data, G10.data, C11.data, M11.data, BS21.data)
+    print("full data sets")
+    calc_chi2(
+        data.data, G10.data, C11.data, M11.data, BS21.data, scatter_data, scatter_sims
+    )
+    print("c<1")
+    calc_chi2(
+        data.data.loc[data.data["c"] < 1.0],
+        G10.data.loc[G10.data["c"] < 1.0],
+        C11.data.loc[C11.data["c"] < 1.0],
+        M11.data.loc[M11.data["c"] < 1.0],
+        BS21.data.loc[BS21.data["c"] < 1.0],
+        scatter_data,
+        scatter_sims,
+    )
+    print("c<0.5")
+    calc_chi2(
+        data.data.loc[data.data["c"] < 0.5],
+        G10.data.loc[G10.data["c"] < 0.5],
+        C11.data.loc[C11.data["c"] < 0.5],
+        M11.data.loc[M11.data["c"] < 0.5],
+        BS21.data.loc[BS21.data["c"] < 0.5],
+        scatter_data,
+        scatter_sims,
+    )
+    print("c<0.3")
+    calc_chi2(
+        data.data.loc[data.data["c"] < 0.3],
+        G10.data.loc[G10.data["c"] < 0.3],
+        C11.data.loc[C11.data["c"] < 0.3],
+        M11.data.loc[M11.data["c"] < 0.3],
+        BS21.data.loc[BS21.data["c"] < 0.3],
+        scatter_data,
+        scatter_sims,
+    )

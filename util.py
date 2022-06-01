@@ -6,7 +6,9 @@ from argparse import ArgumentParser, BooleanOptionalAction
 from collections import Counter
 
 from scipy.stats import binned_statistic
-from numpy import logical_and, isnan
+from statsmodels.nonparametric.kernel_regression import KernelReg
+import numpy as np
+
 
 from br_util.stats import robust_scatter
 
@@ -40,8 +42,8 @@ def bin_dataset(data, x, y, bins=25, error_stat=robust_scatter):
     # data_error[data_error == 0] = SCATTER_FLOOR
     for i, binned_error_bar in enumerate(data_error):
         # if no error but there is data, then there is only one datapoint in bin.
-        if binned_error_bar == 0 and not isnan(data_stat[i]):
-            in_bin = logical_and(
+        if binned_error_bar == 0 and not np.isnan(data_stat[i]):
+            in_bin = np.logical_and(
                 # From https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.binned_statistic.html
                 # All but the last (righthand-most) bin is half-open. In other words,
                 # if bins is [1, 2, 3, 4], then the first bin is [1, 2)
@@ -369,3 +371,116 @@ def checking_sims():
     )
     linear_fit = rv_least_squares(G10, G10.data["SIM_c"] <= 0.3)
     print(linear_fit)
+
+
+def calc_chi2(data, g10, c11, m11, bs21, kr_data, kr_sims):
+    """
+    ...
+    kr_data : Kernel Regression
+        Regression of the RMS of the data. Originally from `figures.plot_rms_c()`.
+    kr_sims : dict
+        Dictionary (keys of ["g10", "c11", "m11", "bs21"]) Kernel Regressions of
+        the predicted RMS from the four scatter models. Originally from `kr_sims()`.
+    """
+    data_c = data["c"].values
+    data_m_prime = data["x1_standardized"].values
+    bin_edges = np.linspace(-0.3, max(data_c), 21)
+    print(f"{len(data_m_prime)=}")
+    for model_name, sim in zip(
+        ["g10", "c11", "m11", "bs21"],
+        [g10, c11, m11, bs21],
+    ):
+        sim_c = sim["c"].values
+        sim_m_prime = sim["x1_standardized"].values
+        # equations 6 and 8 from P22
+        chi_c = _chi_c(data_c, sim_c, bin_edges)
+        chi_mprime = _chi_mprime(data_c, data_m_prime, kr_data, kr_sims[model_name])
+        chi = chi_c + chi_mprime
+        print(f"{model_name}, {chi_c:.2f}, {chi_mprime:.2f}")
+
+
+def _chi_c(data, sim, bins):
+    # equation 6 from P22
+    N_data, _ = np.histogram(data, bins)
+    N_sim, _ = np.histogram(sim, bins)
+    # scale sim to match data
+    N_sim = N_sim * np.sum(N_data) / np.sum(N_sim)
+    e_poisson = np.sqrt(N_data)
+    # if no data, set error to 1, still test that sim matches the no data.
+    e_poisson[N_data == 0] = 1
+    # e_poisson[~np.isfinite(e_poisson)] = 1 # Idk why Brodie had this. I am skipping it for now.
+    return np.sum((N_data - N_sim) ** 2 / e_poisson ** 2)
+
+
+def _chi_mprime(data_c, data_m_prime, kr_data, kr_sim):
+
+    # OLD per bin chi^2
+    # (data_c, data_m_prime, sim_c, sim_m_prime, bins):
+    # # equation 8 from P22
+    # m_prime_data, _, _ = binned_statistic(
+    #     data_c, data_m_prime, statistic="median", bins=bins
+    # )
+    # m_prime_scatter, _, _ = binned_statistic(
+    #     data_c, data_m_prime, statistic=robust_scatter, bins=bins
+    # )
+    # # QUESTION: should I set nan values here to be same as bad errors, or 10x bad errors?
+    # m_prime_sim, _, _ = binned_statistic(
+    #     sim_c, sim_m_prime, statistic="median", bins=bins
+    # )
+    # # QUESTION: This number is very important. Should I do the fitting and just let the first chi square handle this issue?
+    # m_prime_sim[np.isnan(m_prime_sim)] = -15.5
+    # N_data, _ = np.histogram(data_c, bins)
+    # # QUESTION: what should we do when N_data is zero?
+    # # Does not matter, since m_prime_data will be nan for these values.
+    # N_data[N_data == 0] = 1
+    # # QUESTION: why is it robust scatter and not robust scatter squared?
+    # e_m_prime_sqr = m_prime_scatter / np.sqrt(N_data)
+    # # if 0 or 1 datum in a bin, set error to 1, still test that sim matches the no data.
+    # # QUESTION: Should this be 1, or the global RMS value?
+    # e_m_prime_sqr[m_prime_scatter == 0] = 0.2
+
+    # equation 8 from P22
+    m_prime_sim = kr_sim.fit(data_c)[0]
+
+    # N_data, _ = np.histogram(data_c, bins)
+    # # QUESTION: what should we do when N_data is zero?
+    # # Does not matter, since m_prime_data will be nan for these values.
+    # N_data[N_data == 0] = 1
+    # # QUESTION: why is it robust scatter and not robust scatter squared?
+    # e_m_prime_sqr = m_prime_scatter / np.sqrt(N_data)
+    # # if 0 or 1 datum in a bin, set error to 1, still test that sim matches the no data.
+    # # QUESTION: Should this be 1, or the global RMS value?
+    # e_m_prime_sqr[m_prime_scatter == 0] = 0.2
+    e_m_prime_sqr = kr_data.fit(data_c)[0]
+
+    # nansum to ignore nan's in m_prime_data
+    return np.nansum((data_m_prime - m_prime_sim) ** 2 / e_m_prime_sqr ** 2)
+
+
+def kr_sims(g10, c11, m11, bs21):
+    """
+    use as kr["g10"].bins(data["c"])[0] or
+    xs = np.linespace(min, max, 100)
+    kr["bs21"].fit(xs)[0]
+    """
+    kr = {}
+    bin_edges = np.linspace(-0.3, 1.7, 20 + 1)  # edges is n_bins + 1
+    for model_name, simulation in zip(
+        ["g10", "c11", "m11", "bs21"],
+        [g10, c11, m11, bs21],
+    ):
+        stat, edges, _ = binned_statistic(
+            simulation["c"],
+            (simulation["x1_standardized"]),
+            statistic="median",
+            bins=bin_edges,
+        )
+
+        # KernelReg can not take nan values, or the whole KR is nan.
+        kr[model_name] = KernelReg(
+            stat[~np.isnan(stat)],
+            ((edges[:-1] + edges[1:]) / 2)[~np.isnan(stat)],
+            "c",
+        )
+
+    return kr
