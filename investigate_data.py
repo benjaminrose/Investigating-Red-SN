@@ -39,6 +39,7 @@ if __name__ == "__main__":
 
     FAST = cli.fast
     ALL = cli.all
+    TALK = cli.talk
     if FAST:
         RUN_LINMIX = False
     else:
@@ -192,6 +193,22 @@ if __name__ == "__main__":
             ]
         ].sort_values("c")
     )
+    print("### Possible Iax Outlier")
+    print(
+        data.data.loc[
+            np.bitwise_and(data.data["c"] < 1.0, data.data["x1_standardized"] > -16),
+            [
+                # "zHD",
+                "x1",
+                "x1ERR",
+                "c",
+                "cERR",
+                "x1_standardized",
+                # "x1_standardized_ERR",
+                "FITPROB",
+            ],
+        ]
+    )
     print("### Possible New H0 Calibrators.")
     print(
         data.data.loc[
@@ -237,15 +254,15 @@ if __name__ == "__main__":
         ]
     )
     print(
-        "delta-mag for c>0.3 (beta=3.1, delta-beta=0.2):",
+        "delta-mag for c>0.3 (beta=3.01, delta-beta=-0.07):",
         data.data.loc[
             objects_with_rv,
             ["x1_standardized"],
         ]
         - (
-            (3.1026 + 0.2173) * data.data.loc[objects_with_rv, ["c"]].values
+            (3.00956967 - 0.06739) * data.data.loc[objects_with_rv, ["c"]].values
             - 19.32
-            - 0.3 * 3.10260987
+            - 0.3 * 3.00956967
         ),
     )
     print(Style.RESET_ALL)
@@ -322,6 +339,9 @@ if __name__ == "__main__":
 
     data.plot_hist_plus("c", [G10.data, C11.data, M11.data, BS21.data], f"c_dist.pdf")
 
+    if TALK:
+        data.plot_hist("c", f"c_dist_talk.pdf")
+
     if not FAST:
         posterior_corner(
             fitted.posterior,
@@ -393,6 +413,22 @@ if __name__ == "__main__":
         c_max_fit=C_MAX_FIT,
         bins=BINS,
     )
+    if TALK:
+        plot_binned(
+            data.data,
+            x_col="c",
+            y_col="x1_standardized",
+            fit=fitted.posterior.stack(draws=("chain", "draw")),
+            c_max_fit=C_MAX_FIT,
+            bins=BINS,
+            scatter=scatter_data,
+            filename="color-luminosity-talk.pdf",
+            fig_options={
+                "y_label": r"M$'$ (mag)",
+                "y_flip": True,
+                "ylim": [-14.5, -20.9],  # [-14.5, -21.5] elsewhere
+            },
+        )
     plot_binned(
         data.data,
         # BS21.data,
@@ -477,7 +513,7 @@ if __name__ == "__main__":
     calc_chi2(
         data.data, G10.data, C11.data, M11.data, BS21.data, scatter_data, scatter_sims
     )
-    print("c<1")
+    print("\nc<1")
     calc_chi2(
         data.data.loc[data.data["c"] < 1.0],
         G10.data.loc[G10.data["c"] < 1.0],
@@ -487,7 +523,7 @@ if __name__ == "__main__":
         scatter_data,
         scatter_sims,
     )
-    print("c<0.5")
+    print("\nc<0.5")
     calc_chi2(
         data.data.loc[data.data["c"] < 0.5],
         G10.data.loc[G10.data["c"] < 0.5],
@@ -497,7 +533,7 @@ if __name__ == "__main__":
         scatter_data,
         scatter_sims,
     )
-    print("c<0.3")
+    print("\nc<0.3")
     calc_chi2(
         data.data.loc[data.data["c"] < 0.3],
         G10.data.loc[G10.data["c"] < 0.3],

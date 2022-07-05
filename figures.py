@@ -82,7 +82,7 @@ def plot_binned(
     #         sim_low = sim.loc[sim["HOST_LOGMASS"] <= 10]
 
     # plot rms/sqrt(n) rather than date_error
-    data_x, data_y, data_stat, data_edges, _, data_n_counter = bin_dataset(
+    data_x, data_y, data_stat, data_edges, data_error, data_n_counter = bin_dataset(
         data, x_col, y_col, bins=bins
     )
 
@@ -130,10 +130,14 @@ def plot_binned(
             fmt="^",
             label="Binned " + fig_options.get("sim_name", "simulation"),
         )
+    if fit is not None:
+        yerr = scatter.fit((data_edges[:-1] + data_edges[1:]) / 2)[0] / np.sqrt(data_n)
+    else:
+        yerr = data_error
     ax.errorbar(
         (data_edges[:-1] + data_edges[1:]) / 2,
         data_stat,
-        yerr=scatter.fit((data_edges[:-1] + data_edges[1:]) / 2)[0] / np.sqrt(data_n),
+        yerr=yerr,
         color="tab:orange",
         fmt=">",
         label="Binned " + fig_options.get("data_name", "Pantheon+"),
@@ -176,7 +180,7 @@ def plot_binned(
     _add_fig_options(ax, x_col, y_col, fig_options)
     sns.despine()
 
-    if fit is not None:
+    if model_krs is not None:
         ncol = 2
     else:
         ncol = 1
@@ -224,9 +228,7 @@ def posterior_corner(posterior, var_names, filename=""):
             r"$\alpha_c$",
         ],
     )
-    save_plot(
-        "figures/" + filename, bbox_inches="tight"
-    )  # removed bbox_inches="tight" from save_plot()
+    save_plot(filename)
 
 
 def plot_rms_c(data, fit, c_max_fit, bins, filename="rms-c.pdf"):

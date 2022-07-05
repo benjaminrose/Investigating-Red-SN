@@ -8,9 +8,12 @@ from collections import Counter
 from scipy.stats import binned_statistic
 from statsmodels.nonparametric.kernel_regression import KernelReg
 import numpy as np
+import matplotlib.pyplot as plt
 
-
+from br_util.plot import save_plot, new_figure
 from br_util.stats import robust_scatter
+
+from hypothesis_testing import ks1d
 
 
 def bin_dataset(data, x, y, bins=25, error_stat=robust_scatter):
@@ -109,6 +112,12 @@ def parse_cli():
         action="store_true",
         default=False,
         help="include parts that are no longer in main analysis (default: %(default)s)",
+    )
+    arg_parser.add_argument(
+        "--talk",
+        action="store_true",
+        default=False,
+        help="make simpiler figures (default: %(default)s)",
     )
     arg_parser.add_argument(
         "-v",
@@ -394,7 +403,9 @@ def calc_chi2(data, g10, c11, m11, bs21, kr_data, kr_sims):
         sim_m_prime = sim["x1_standardized"].values
         # equations 6 and 8 from P22
         chi_c = _chi_c(data_c, sim_c, bin_edges)
-        chi_mprime = _chi_mprime(data_c, data_m_prime, kr_data, kr_sims[model_name])
+        chi_mprime = _chi_mprime(
+            data_c, data_m_prime, kr_data, kr_sims[model_name], model_name
+        )
         chi = chi_c + chi_mprime
         print(f"{model_name}, {chi_c:.2f}, {chi_mprime:.2f}")
 
@@ -409,10 +420,16 @@ def _chi_c(data, sim, bins):
     # if no data, set error to 1, still test that sim matches the no data.
     e_poisson[N_data == 0] = 1
     # e_poisson[~np.isfinite(e_poisson)] = 1 # Idk why Brodie had this. I am skipping it for now.
+
+    if debug := False:
+        # indexes for `sim` to re-sample `sim` to be the length of `data`.
+        subsample = np.random.randint(0, len(sim), len(data))
+        print(f"KS test {ks1d(data, sim[subsample]):.4f}")
+
     return np.sum((N_data - N_sim) ** 2 / e_poisson ** 2)
 
 
-def _chi_mprime(data_c, data_m_prime, kr_data, kr_sim):
+def _chi_mprime(data_c, data_m_prime, kr_data, kr_sim, sim_name=None):
 
     # OLD per bin chi^2
     # (data_c, data_m_prime, sim_c, sim_m_prime, bins):
@@ -454,7 +471,17 @@ def _chi_mprime(data_c, data_m_prime, kr_data, kr_sim):
     e_m_prime_sqr = kr_data.fit(data_c)[0]
 
     # nansum to ignore nan's in m_prime_data
-    return np.nansum((data_m_prime - m_prime_sim) ** 2 / e_m_prime_sqr ** 2)
+    chi = np.nansum(
+        (data_m_prime - m_prime_sim - np.median(data_m_prime - m_prime_sim)) ** 2
+        / e_m_prime_sqr ** 2
+    )
+    if debug := False:
+        _, ax = new_figure()
+        ax.hist(data_m_prime - m_prime_sim - np.median(data_m_prime - m_prime_sim))
+        ax.set_yscale("log")
+        save_plot(f"chi_m_{max(data_c):.2f}_{sim_name}.pdf")
+    # print("offsets:", np.median(data_m_prime - m_prime_sim), "mag")
+    return chi
 
 
 def kr_sims(g10, c11, m11, bs21):

@@ -115,6 +115,7 @@ class Fitres:
         self._cut_MWEBV(0.3)  # checking once, ~25% of SN effected
         if not sim:
             self._cut_Trestmin(5.0)  # checking once, no SN effected
+        self._cut_FITPROB(0)
 
         # Also fix mass issues
         self._clean_mass()
@@ -148,7 +149,14 @@ class Fitres:
             print(
                 f'SN with low stellar mass, post-cleaning:\n{self.data.loc[self.data["HOST_LOGMASS"] < 7.0, "HOST_LOGMASS"]}'
             )
-
+    
+    def _cut_FITPROB(self, min):
+        if self.VERBOSE:
+            print("pre cut", self.data["FITPROB"].describe())
+        self.data = self.data[self.data["FITPROB"] > min]
+        if self.VERBOSE:
+            print("post cut", self.data["FITPROB"].describe())
+            
     def _cut_PKMJDERR(self, PKMJDERR):
         if self.VERBOSE:
             print("pre cut", self.data["PKMJDERR"].describe())
