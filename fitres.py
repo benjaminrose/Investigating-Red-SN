@@ -20,8 +20,9 @@ COSMO = wCDM(H0=70, Om0=0.3, Ode0=0.7, w0=-1)
 
 class Fitres:
     # should this subclass pandas?
-    def __init__(self, file_path, alpha=0.15, verbose=False):
+    def __init__(self, file_path, z_min, alpha=0.15, verbose=False):
         self.data = read_data(file_path, 1, verbose)
+        self._cut_redshift(z_min)
         self.VERBOSE = verbose
         # Keywords used in plotting both data sets
         # So not: data, labels, colors, ...
@@ -149,14 +150,14 @@ class Fitres:
             print(
                 f'SN with low stellar mass, post-cleaning:\n{self.data.loc[self.data["HOST_LOGMASS"] < 7.0, "HOST_LOGMASS"]}'
             )
-    
+
     def _cut_FITPROB(self, min):
         if self.VERBOSE:
             print("pre cut", self.data["FITPROB"].describe())
         self.data = self.data[self.data["FITPROB"] > min]
         if self.VERBOSE:
             print("post cut", self.data["FITPROB"].describe())
-            
+
     def _cut_PKMJDERR(self, PKMJDERR):
         if self.VERBOSE:
             print("pre cut", self.data["PKMJDERR"].describe())
@@ -221,12 +222,18 @@ class Fitres:
             )
         return self.data
 
+    def _cut_redshift(self, min=0, max=100):
+        self.data = self.data[min <= self.data["zHD"]]
+        self.data = self.data[self.data["zHD"] <= max]
+        return self
+
     def _deduplicate(self):
         duplicates = self.data[self.data.index.duplicated(keep=False)]
         singles = self.data[~self.data.index.duplicated(keep=False)]
         while 0 < len(duplicates):
             index = duplicates.index[0]
-            if len(duplicates.loc[index, ["x1"]]) > 4:
+            if len(duplicates.loc[index, ["x1"]]) > 3:
+                print("Ojbects with 4 surveys (plust 2006X):")
                 print(duplicates.loc[index, ["IDSURVEY", "x1", "c", "x1ERR", "cERR"]])
             x1, c = duplicates.loc[index, ["x1", "c"]].mean()
             x1_err_min, c_err_min = (

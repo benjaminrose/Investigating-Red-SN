@@ -14,6 +14,7 @@ from br_util.plot import save_plot, new_figure
 from br_util.stats import robust_scatter
 
 from hypothesis_testing import ks1d
+from broken_linear import broken_linear
 
 
 def bin_dataset(data, x, y, bins=25, error_stat=robust_scatter):
@@ -79,10 +80,22 @@ def parse_cli():
         help="number of bins to use in color-luminosity plot (default: %(default)s)",
     )
     arg_parser.add_argument(
+        "--break_value",
+        type=float,
+        default=0.3,
+        help="c-value to apply broken linear fit (default: %(default)s)",
+    )
+    arg_parser.add_argument(
         "--cmax",
         type=float,
         default=1.3244,  # max in BS21 on Oct 22, 2021
         help="maximum c used in fitting BETA (default: %(default)s)",
+    )
+    arg_parser.add_argument(
+        "--zmin",
+        type=float,
+        default=0.0,
+        help="Minimum redshift to use (default: %(default)s)",
     )
     arg_parser.add_argument(
         "--linmix",
@@ -426,7 +439,7 @@ def _chi_c(data, sim, bins):
         subsample = np.random.randint(0, len(sim), len(data))
         print(f"KS test {ks1d(data, sim[subsample]):.4f}")
 
-    return np.sum((N_data - N_sim) ** 2 / e_poisson ** 2)
+    return np.sum((N_data - N_sim) ** 2 / e_poisson**2)
 
 
 def _chi_mprime(data_c, data_m_prime, kr_data, kr_sim, sim_name=None):
@@ -473,7 +486,7 @@ def _chi_mprime(data_c, data_m_prime, kr_data, kr_sim, sim_name=None):
     # nansum to ignore nan's in m_prime_data
     chi = np.nansum(
         (data_m_prime - m_prime_sim - np.median(data_m_prime - m_prime_sim)) ** 2
-        / e_m_prime_sqr ** 2
+        / e_m_prime_sqr**2
     )
     if debug := False:
         _, ax = new_figure()
