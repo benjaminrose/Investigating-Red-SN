@@ -1,4 +1,4 @@
-"""module contianing all the functions around the borken linear model."""
+"""module containing all the functions around the broken linear model."""
 
 import numpy as np
 
@@ -33,15 +33,6 @@ def broken_linear(c, theta_cosmo, delta_theta, M_0, c_break=0.3):
         + ~pre_break * (m_cosmo + delta_m) * (c - c_break)
         + M_at_c_break
     )
-    # piecewise does not work with pymc3/theanos
-    # return np.piecewise(
-    #     c.values,
-    #     c.le(c_break),
-    #     [
-    #         lambda x: m_cosmo * (x - c_break) + M_at_c_break,
-    #         lambda x: (m_cosmo + delta_m) * (x - c_break) + M_at_c_break,
-    #     ],
-    # )
 
 
 def chi_square_params2slopes(params):
@@ -76,14 +67,14 @@ def log_prior(params):
     theta_cosmo, delta_theta, M_0 = params
     if sigma < 0:
         return -np.inf  # log(0) else:
-    return -1.5 * np.log(1 + beta ** 2) - np.log(sigma)
+    return -1.5 * np.log(1 + beta**2) - np.log(sigma)
 
 
 def log_like(params, x, y):
     theta_cosmo, delta_theta, M_0 = params
     y_model = alpha + beta * x
     return -0.5 * np.sum(
-        np.log(2 * np.pi * sigma ** 2) + (y - y_model) ** 2 / sigma ** 2
+        np.log(2 * np.pi * sigma**2) + (y - y_model) ** 2 / sigma**2
     )
 
 
