@@ -42,7 +42,7 @@ def rv_least_squares(data, fit_mask, high_degree_fits=False):
     return linear_fit.convert()
 
 
-def rv_broken_linear_bayesian(data, fast=False):
+def rv_broken_linear_bayesian(data, c_break, fast=False):
     """PyMC3's normal and skew normal distributions can be passed the keyword
     `sigma` to use the standard deviation scale parameter. This is what we did
     in the code, however our notation in the paper ($\mathcal{N} \sim (\mu, \sigma^2)$)
@@ -92,7 +92,9 @@ def rv_broken_linear_bayesian(data, fast=False):
         M_true = pm.Normal(
             "M'_true",
             # broken_linear needs an observed variable to cut on
-            mu=broken_linear.broken_linear(c_true, theta_cosmo, delta_theta, M0),
+            mu=broken_linear.broken_linear(
+                c_true, theta_cosmo, delta_theta, M0, c_break
+            ),
             sigma=sigma_int,
             dims="observation",
         )

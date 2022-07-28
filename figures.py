@@ -21,7 +21,7 @@ from util import bin_dataset
 from hypothesis_testing import ks2d
 from broken_linear import broken_linear
 
-__all__ = ["plot_binned", "chi2_bin"]
+__all__ = ["plot_binned", "chi2_bin", "plot_rms_c"]
 
 sns.set_theme(context="talk", style="ticks", font="serif", color_codes=True)
 
@@ -33,6 +33,7 @@ def plot_binned(
     y_col="HOST_LOGMASS",
     fit=None,
     c_max_fit=2.0,
+    c_break=None,
     bins=15,
     show_data=True,
     # split_mass=False,
@@ -175,7 +176,7 @@ def plot_binned(
             ax.plot(xs, model_krs[key].fit(xs)[0], linestyle=ls, label=label)
 
     if fit is not None:
-        _add_fit(ax, data_x, fit, c_max_fit)
+        _add_fit(ax, data_x, fit, c_max_fit, c_break)
 
     _add_fig_options(ax, x_col, y_col, fig_options)
     sns.despine()
@@ -231,7 +232,9 @@ def posterior_corner(posterior, var_names, filename=""):
     save_plot(filename)
 
 
-def plot_rms_c(data, fit, c_max_fit, bins, filename="rms-c.pdf"):
+def plot_rms_c(
+    data, fit, c_max_fit, bins, c_break, scatter_sims=None, filename="rms-c.pdf"
+):
     """
     RMS of the residual to broken linear fit vs c.
 
@@ -254,9 +257,11 @@ def plot_rms_c(data, fit, c_max_fit, bins, filename="rms-c.pdf"):
         fit["θ"].median().values,
         fit["Δ_θ"].median().values,
         fit["M'_0"].median().values,
+        c_break,
     )
     if evenly_filled:
         bins = 34  # 17 bins is ~100 objects per bin
+        # bins = 30
         N = len(data["c"])
         bins = np.interp(np.linspace(0, N, bins + 1), np.arange(N), np.sort(data["c"]))
 
@@ -279,6 +284,7 @@ def plot_rms_c(data, fit, c_max_fit, bins, filename="rms-c.pdf"):
             data_stat,
             xerr=x_error,
             fmt=".",
+            label="Pantheon+",
         )
         p = np.polyfit(
             (data_edges[:-1] + data_edges[1:]) / 2,
@@ -299,7 +305,23 @@ def plot_rms_c(data, fit, c_max_fit, bins, filename="rms-c.pdf"):
             (data_edges[-2] + data_edges[-1]) / 2,
             100,
         )
-        ax.plot(xs, kr.fit(xs)[0])
+        ax.plot(xs, kr.fit(xs)[0], label="Smoothed Pantheon+")
+
+        if scatter_sims is not None:
+            # xs = np.linspace(data["c"].min(), data["c"].max(), 100)
+            lables = ["G10", "C11", "M11", "P22"]
+            # https://matplotlib.org/stable/gallery/lines_bars_and_markers/linestyles.html
+            line_styles = ["dotted", "dashed", "dashdot", (0, (3, 5, 1, 5, 1, 5))]
+            for key, label, ls in zip(scatter_sims.keys(), lables, line_styles):
+                ax.plot(
+                    xs,
+                    scatter_sims[key].fit(xs)[0],
+                    alpha=0.8,
+                    linewidth=2,
+                    linestyle=ls,
+                    label=label,
+                )
+            leg = ax.legend(fontsize="xx-small", loc="best", ncol=2)
 
     else:
         counted = Counter(binnumber)
@@ -348,30 +370,14 @@ def _add_fit_linmix(ax, fit, xs):
         + r" $\pm$ "
         + f"{robust_scatter(fit['beta']):.2f}",
     )
-    # ax.plot(
-    #     xs,
-    #     np.median(lm_cosmo.chain["alpha"]) + xs * np.median(lm_cosmo.chain["beta"]),
-    #     label=r"$\beta_{cosmo}=$"
-    #     + f"{np.median(lm_cosmo.chain['beta']):.2f}"
-    #     + r" $\pm$ "
-    #     + f"{robust_scatter(lm_cosmo.chain['beta']):.2f}",
-    # )
-    # ax.plot(
-    #     xs,
-    #     np.median(lm_red.chain["alpha"]) + xs * np.median(lm_red.chain["beta"]),
-    #     label=r"$\beta_{red}=$"
-    #     + f"{np.median(lm_red.chain['beta']):.2f}"
-    #     + r" $\pm$ "
-    #     + f"{robust_scatter(lm_red.chain['beta']):.2f}",
-    # )
 
 
-def _add_fit_broken_freq(ax, fit, xs):
+def _add_fit_broken_freq(ax, fit, xs, c_break):
     """
     fit : scipy.optimize.OptimizeResult
         Full output from something like scipy.optimize.minimize.
     """
-    ys = broken_linear(pd.Series(xs), *fit.x)
+    ys = broken_linear(pd.Series(xs), *fit.x, c_break)
     ax.plot(
         xs,
         ys,
@@ -383,7 +389,7 @@ def _add_fit_broken_freq(ax, fit, xs):
     )
 
 
-def _add_fit_broken_bayes(ax, fit, xs):
+def _add_fit_broken_bayes(ax, fit, xs, c_break):
     """
     fit : stacked arviz.InferenceData.posterior
         posterior part of the arviz.InferenceData. Should be
@@ -401,6 +407,7 @@ def _add_fit_broken_bayes(ax, fit, xs):
             fit["θ"][i].values,
             fit["Δ_θ"][i].values,
             fit["M'_0"][i].values,
+            c_break,
         )
         # if i == 0:
         #     # add one nearly blank line in the legned
@@ -414,6 +421,7 @@ def _add_fit_broken_bayes(ax, fit, xs):
         fit["θ"].median().values,
         fit["Δ_θ"].median().values,
         fit["M'_0"].median().values,
+        c_break,
     )
     ax.plot(
         xs,
@@ -430,7 +438,7 @@ def _add_fit_broken_bayes(ax, fit, xs):
     )
 
 
-def _add_fit(ax, data_x, fit, c_max_fit):
+def _add_fit(ax, data_x, fit, c_max_fit, c_break):
     FIT_TYPE = "broken_bayes"  # TODO: Remove hard coding
     if c_max_fit > data_x.max():
         print(
@@ -444,9 +452,9 @@ def _add_fit(ax, data_x, fit, c_max_fit):
     if FIT_TYPE == "linmix":
         _add_fit_linmix(ax, fit, xs)
     elif FIT_TYPE == "broken_freq":
-        _add_fit_broken_freq(ax, fit, xs)
+        _add_fit_broken_freq(ax, fit, xs, c_break)
     elif FIT_TYPE == "broken_bayes":
-        _add_fit_broken_bayes(ax, fit, xs)
+        _add_fit_broken_bayes(ax, fit, xs, c_break)
 
 
 def _add_fig_options(ax, x_col, y_col, fig_options):
@@ -614,9 +622,9 @@ def _rms(c, degree=2):
     # 3-degrees, -2.60842542 * c**3 + 2.81549634 * c**2 + 0.31497116 * c + 0.1741919
     # 2-degrees, 0.30437141 * c**2 + 0.25717747 * c + 0.19878428
     if degree == 3:
-        return -2.60842542 * c ** 3 + 2.81549634 * c ** 2 + 0.31497116 * c + 0.1741919
+        return -2.60842542 * c**3 + 2.81549634 * c**2 + 0.31497116 * c + 0.1741919
     else:
-        return 0.30437141 * c ** 2 + 0.25717747 * c + 0.19878428
+        return 0.30437141 * c**2 + 0.25717747 * c + 0.19878428
 
 
 def chi2_bin(data, g10, c11, m11, bs21):

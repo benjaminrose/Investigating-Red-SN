@@ -484,22 +484,35 @@ def _chi_mprime(data_c, data_m_prime, kr_data, kr_sim, sim_name=None):
     return chi
 
 
-def kr_sims(g10, c11, m11, bs21):
+def kr_sims(g10, c11, m11, bs21, c_break, var_name="x1_standardized", fit=None):
     """
     use as kr["g10"].bins(data["c"])[0] or
     xs = np.linespace(min, max, 100)
     kr["bs21"].fit(xs)[0]
     """
     kr = {}
-    bin_edges = np.linspace(-0.3, 1.7, 20 + 1)  # edges is n_bins + 1
+    bin_edges = np.linspace(-0.3, 1.7, 34 + 1)  # edges is n_bins + 1
     for model_name, simulation in zip(
         ["g10", "c11", "m11", "bs21"],
         [g10, c11, m11, bs21],
     ):
+        if fit is not None:
+            ys = broken_linear(
+                simulation["c"],
+                fit["θ"].median().values,
+                fit["Δ_θ"].median().values,
+                fit["M'_0"].median().values,
+                c_break=c_break,
+            )
+            y = simulation["x1_standardized"] - ys
+            stat = lambda x: np.sqrt(np.mean(np.square(x)))
+        else:
+            y = simulation["x1_standardized"]
+            stat = "median"
         stat, edges, _ = binned_statistic(
             simulation["c"],
-            (simulation["x1_standardized"]),
-            statistic="median",
+            (y),
+            statistic=stat,
             bins=bin_edges,
         )
 
