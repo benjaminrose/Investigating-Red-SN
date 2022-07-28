@@ -47,6 +47,9 @@ if __name__ == "__main__":
     ON_SIMS = cli.sims
     C_MAX_FIT = cli.cmax  # this is currently defined in several locations.
     BINS = cli.bins
+    RMS_SIMS = True
+    BREAK_VALUE = cli.break_value
+    Z_MIN = cli.zmin
 
     c_splits = [0.3]  # was [0.1, 0.3] during initial analysis
 
@@ -63,18 +66,43 @@ if __name__ == "__main__":
     print("")  # provides spacing in outputs
     print("# Investigating Highly Reddened SN\n")
 
-    data = Fitres(data_file, alpha, VERBOSE)
+    data = Fitres(data_file, Z_MIN, alpha, VERBOSE)
     # Interesting (for whatever reason) SN that get lost in data cleaning
-    print("## objects that get cut")
-    get_cut = [
-        "1999ek",
-        "2008fp",
-        "2000E",
-        "2006X",
-    ]
+    # only look at this if no cuts have been applied.
+    if Z_MIN <= 0.0001:
+        print("## objects that get cut")
+        get_cut = [
+            "1999ek",
+            "2008fp",
+            "2000E",
+            "2006X",
+        ]
+        print(
+            data.data.loc[
+                get_cut,
+                [
+                    "CIDint",
+                    "IDSURVEY",
+                    "zHD",
+                    "x1",
+                    "x1ERR",
+                    "c",
+                    "cERR",
+                    "PKMJDERR",
+                    "TrestMIN",
+                    "HOST_LOGMASS",
+                    "MWEBV",
+                ],
+            ].sort_values("c")
+        )
+    data.clean_data(x1err_max, x1_max, cerr_max, c_min, deduplicate=True)
+    data.calc_HR()
+
+    print("## high redshift hihgly reddened SN")
+    is_z_gt_04 = np.logical_and(data.data["zHD"] > 0.2, data.data["c"] > 0.3)
     print(
         data.data.loc[
-            get_cut,
+            is_z_gt_04,
             [
                 "CIDint",
                 "IDSURVEY",
@@ -84,14 +112,9 @@ if __name__ == "__main__":
                 "c",
                 "cERR",
                 "PKMJDERR",
-                "TrestMIN",
-                "HOST_LOGMASS",
-                "MWEBV",
             ],
         ].sort_values("c")
     )
-    data.clean_data(x1err_max, x1_max, cerr_max, c_min, deduplicate=True)
-    data.calc_HR()
 
     HST = False
     if HST:
@@ -143,6 +166,7 @@ if __name__ == "__main__":
             BS21.data.loc[
                 fit_mask, ["c", "cERR", "x1_standardized", "x1_standardized_ERR"]
             ],
+            BREAK_VALUE,
             FAST,
         )
         print("Running on BS21 sims.")
@@ -153,19 +177,17 @@ if __name__ == "__main__":
 
         sys.exit()
 
-    # if not FAST:
-    if True:
-        G10 = Fitres(Path("data/G10_SIMDATA.FITRES"), alpha)
-        G10.clean_data(x1err_max, x1_max, cerr_max, c_min, sim=True)
-        G10.calc_HR()
+    G10 = Fitres(Path("data/G10_SIMDATA.FITRES"), Z_MIN, alpha)
+    G10.clean_data(x1err_max, x1_max, cerr_max, c_min, sim=True)
+    G10.calc_HR()
 
-        C11 = Fitres(Path("data/C11_SIMDATA.FITRES"), alpha)
-        C11.clean_data(x1err_max, x1_max, cerr_max, c_min, sim=True)
-        C11.calc_HR()
+    C11 = Fitres(Path("data/C11_SIMDATA.FITRES"), Z_MIN, alpha)
+    C11.clean_data(x1err_max, x1_max, cerr_max, c_min, sim=True)
+    C11.calc_HR()
 
-        M11 = Fitres(Path("data/MANDEL_SIMDATA.FITRES"), alpha)
-        M11.clean_data(x1err_max, x1_max, cerr_max, c_min, sim=True)
-        M11.calc_HR()
+    M11 = Fitres(Path("data/MANDEL_SIMDATA.FITRES"), Z_MIN, alpha)
+    M11.clean_data(x1err_max, x1_max, cerr_max, c_min, sim=True)
+    M11.calc_HR()
 
     print("## Demographics of Sample\n")
     print("### Number of Highly Reddened SN")
@@ -178,6 +200,11 @@ if __name__ == "__main__":
     print(
         f"There are {data.data.loc[data.data['c']>1.0, 'c'].shape[0]} SN with c > 1.0 \n"
     )
+
+    data.slipt_on_c(BREAK_VALUE)
+    print("### mean color values")
+    print(f"Full sample mean: {data.data['c'].describe()}")
+    print(f"Cosmo sample mean: {data.blue_subsample['c'].describe()}")
 
     data.slipt_on_c(0.95)
     print("### SN affected by c=1 boundary.")
@@ -193,78 +220,84 @@ if __name__ == "__main__":
             ]
         ].sort_values("c")
     )
-    print("### Possible Iax Outlier")
-    print(
-        data.data.loc[
-            np.bitwise_and(data.data["c"] < 1.0, data.data["x1_standardized"] > -16),
-            [
-                # "zHD",
-                "x1",
-                "x1ERR",
-                "c",
-                "cERR",
-                "x1_standardized",
-                # "x1_standardized_ERR",
-                "FITPROB",
-            ],
+    if Z_MIN <= 0.0001:
+        print("### Possible Iax Outlier")
+        print(
+            data.data.loc[
+                np.bitwise_and(
+                    data.data["c"] < 1.0, data.data["x1_standardized"] > -16
+                ),
+                [
+                    # "zHD",
+                    "x1",
+                    "x1ERR",
+                    "c",
+                    "cERR",
+                    "x1_standardized",
+                    # "x1_standardized_ERR",
+                    "FITPROB",
+                ],
+            ]
+        )
+        print("### Possible New H0 Calibrators.")
+        print(
+            data.data.loc[
+                # Not in cosmo sample, and have mu<34 (z~0.015)
+                np.bitwise_and(data.data["c"] > 0.3, data.data["zHD"] < 0.015),
+                [
+                    "CIDint",
+                    "IDSURVEY",
+                    "zHD",
+                    "c",
+                    "cERR",
+                ],
+            ].sort_values("zHD")
+        )
+        print("### Delta Mag, assuming: M0=-19.32 & beta=3.10.")
+        objects_with_rv = [
+            "1989B",
+            "1998bu",
+            "1999cl",
+            "1999cp",
+            "1999ee",
+            # "1999ek",  #
+            # "1999pg",  #
+            # "2000E",  #
+            "2000bh",
+            "2000ca",
+            "2002bo",
+            # "2002cv",  #
+            # "2003cg",  #
+            "2006X",  #
+            "2008fp",
+            "2012cg",
+            "2014J",
         ]
-    )
-    print("### Possible New H0 Calibrators.")
-    print(
-        data.data.loc[
-            # Not in cosmo sample, and have mu<34 (z~0.015)
-            np.bitwise_and(data.data["c"] > 0.3, data.data["zHD"] < 0.015),
-            [
-                "CIDint",
-                "IDSURVEY",
-                "zHD",
-                "c",
-                "cERR",
-            ],
-        ].sort_values("zHD")
-    )
-    print("### Delta Mag, assuming: M0=-19.32 & beta=3.10.")
-    objects_with_rv = [
-        "1998bu",
-        "1999cl",
-        "1999cp",
-        "1999ee",
-        # "1999ek",  #
-        # "1999pg",  #
-        # "2000E",  #
-        "2000bh",
-        "2000ca",
-        "2002bo",
-        # "2002cv",  #
-        # "2003cg",  #
-        "2006X",  #
-        "2008fp",
-        "2012cg",
-        "2014J",
-    ]
-    print(
-        data.data.loc[
-            objects_with_rv,
-            [
-                "CIDint",
-                "IDSURVEY",
-                "c",
-                "HOST_LOGMASS",
-            ],
-        ]
-    )
-    print(
-        "delta-mag for c>0.3 (beta=3.01, delta-beta=-0.07):",
-        data.data.loc[
-            objects_with_rv,
-            ["x1_standardized"],
-        ]
-        - (
-            (3.00956967 - 0.06739) * data.data.loc[objects_with_rv, ["c"]].values
-            - 19.32
-            - 0.3 * 3.00956967
-        ),
-    )
+        print(
+            data.data.loc[
+                objects_with_rv,
+                [
+                    "CIDint",
+                    "IDSURVEY",
+                    "zHD",
+                    "c",
+                    "cERR",
+                    "HOST_LOGMASS",
+                ],
+            ]
+        )
+        print(
+            "delta-mag for c>0.3 (beta=3.01, delta-beta=-0.07):",
+            data.data.loc[
+                objects_with_rv,
+                ["x1_standardized"],
+            ]
+            - (
+                (3.00956967 - 0.06739) * data.data.loc[objects_with_rv, ["c"]].values
+                - 19.32
+                - 0.3 * 3.00956967
+            ),
+        )
     print(Style.RESET_ALL)
 
     print("## Basic Fit of Color-Luminosity Relationship")
@@ -287,6 +320,7 @@ if __name__ == "__main__":
         data.data.loc[
             fit_mask, ["c", "cERR", "x1_standardized", "x1_standardized_ERR"]
         ],
+        BREAK_VALUE,
         FAST,
     )
     print("Medians:", fitted.posterior.median())
@@ -339,6 +373,10 @@ if __name__ == "__main__":
 
     data.plot_hist_plus("c", [G10.data, C11.data, M11.data, BS21.data], f"c_dist.pdf")
 
+    print(
+        f"Number of objects per c bin (of size 0.1); {np.histogram(data.data['c'], bins=np.arange(-0.3, 2.0, 0.1))[0]}"
+    )
+
     if TALK:
         data.plot_hist("c", f"c_dist_talk.pdf")
 
@@ -357,7 +395,9 @@ if __name__ == "__main__":
             filename="corner.pdf",
         )
 
-    scatter_sims = kr_sims(G10.data, C11.data, M11.data, BS21.data)
+    luminosity_sims = kr_sims(
+        G10.data, C11.data, M11.data, BS21.data, c_break=BREAK_VALUE
+    )
 
     print("## Data vs Sims\n")
     if ALL:
@@ -407,12 +447,28 @@ if __name__ == "__main__":
                 "ylim": [6.5, 13.5],
             },
         )
+
+    if RMS_SIMS:
+        scatter_sims = kr_sims(
+            G10.data,
+            C11.data,
+            M11.data,
+            BS21.data,
+            c_break=BREAK_VALUE,
+            var_name="",
+            fit=fitted.posterior.stack(draws=("chain", "draw")),
+        )
+    else:
+        scatter_sims = None
     scatter_data = plot_rms_c(
         data.data,
         fit=fitted.posterior.stack(draws=("chain", "draw")),
         c_max_fit=C_MAX_FIT,
+        c_break=BREAK_VALUE,
         bins=BINS,
+        scatter_sims=scatter_sims,
     )
+
     if TALK:
         plot_binned(
             data.data,
@@ -420,6 +476,7 @@ if __name__ == "__main__":
             y_col="x1_standardized",
             fit=fitted.posterior.stack(draws=("chain", "draw")),
             c_max_fit=C_MAX_FIT,
+            c_break=BREAK_VALUE,
             bins=BINS,
             scatter=scatter_data,
             filename="color-luminosity-talk.pdf",
@@ -436,8 +493,9 @@ if __name__ == "__main__":
         y_col="x1_standardized",
         fit=fitted.posterior.stack(draws=("chain", "draw")),
         c_max_fit=C_MAX_FIT,
+        c_break=BREAK_VALUE,
         bins=BINS,
-        model_krs=scatter_sims,
+        model_krs=luminosity_sims,
         scatter=scatter_data,
         add_14J=True,
         filename="color-luminosity-BS21.pdf",
@@ -511,7 +569,13 @@ if __name__ == "__main__":
 
     print("full data sets")
     calc_chi2(
-        data.data, G10.data, C11.data, M11.data, BS21.data, scatter_data, scatter_sims
+        data.data,
+        G10.data,
+        C11.data,
+        M11.data,
+        BS21.data,
+        scatter_data,
+        luminosity_sims,
     )
     print("\nc<1")
     calc_chi2(
@@ -521,7 +585,7 @@ if __name__ == "__main__":
         M11.data.loc[M11.data["c"] < 1.0],
         BS21.data.loc[BS21.data["c"] < 1.0],
         scatter_data,
-        scatter_sims,
+        luminosity_sims,
     )
     print("\nc<0.5")
     calc_chi2(
@@ -531,7 +595,7 @@ if __name__ == "__main__":
         M11.data.loc[M11.data["c"] < 0.5],
         BS21.data.loc[BS21.data["c"] < 0.5],
         scatter_data,
-        scatter_sims,
+        luminosity_sims,
     )
     print("\nc<0.3")
     calc_chi2(
@@ -541,5 +605,5 @@ if __name__ == "__main__":
         M11.data.loc[M11.data["c"] < 0.3],
         BS21.data.loc[BS21.data["c"] < 0.3],
         scatter_data,
-        scatter_sims,
+        luminosity_sims,
     )
